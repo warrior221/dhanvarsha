@@ -1,0 +1,366 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Prisma 7 no longer accepts `url` here. The connection string for migrate /
+// studio lives in prisma.config.ts; the runtime client connects via the
+// driver adapter configured in src/lib/db.ts.
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  RETURNED
+}
+
+enum PaymentMethod {
+  PREPAID
+  COD
+}
+
+enum AttributeInputType {
+  CHECKBOX
+  SELECT
+}
+
+enum OtpChannel {
+  EMAIL
+  WHATSAPP
+}
+
+enum OtpPurpose {
+  EMAIL_VERIFICATION
+  PHONE_VERIFICATION
+  COD_CONFIRMATION
+  PASSWORD_RESET
+}
+
+model User {
+  id              String               @id @default(cuid())
+  name            String
+  email           String               @unique
+  passwordHash    String?
+  role            Role                 @default(CUSTOMER)
+  phone           String?
+  emailVerified   DateTime?
+  phoneVerified   DateTime?
+  twoFactorSecret String?
+  addresses       Address[]
+  cart            Cart?
+  orders          Order[]
+  wishlist        Wishlist[]
+  reviews         Review[]
+  statusChanges   OrderStatusHistory[]
+  sessions        Session[]
+  setupTokens     SetupToken[]
+  createdAt       DateTime             @default(now())
+
+  @@index([role])
+}
+
+model Address {
+  id        String  @id @default(cuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName  String
+  line1     String
+  line2     String?
+  city      String
+  state     String
+  pincode   String
+  phone     String
+  isDefault Boolean @default(false)
+  orders    Order[]
+
+  @@index([userId])
+}
+
+model Category {
+  id       String    @id @default(cuid())
+  name     String
+  slug     String    @unique
+  position Int       @default(0)
+  products Product[]
+}
+
+model Product {
+  id               String                  @id @default(cuid())
+  sku              String                  @unique
+  name             String
+  slug             String                  @unique
+  description      String
+  categoryId       String
+  category         Category                @relation(fields: [categoryId], references: [id])
+
+  mrp              Decimal                 @db.Decimal(10, 2)
+  sellingPrice     Decimal                 @db.Decimal(10, 2)
+
+  isReadymade      Boolean                 @default(false)
+  careInstructions String?
+  isActive         Boolean                 @default(true)
+
+  cost             ProductCost?
+  attributes       ProductAttributeValue[]
+  images           ProductImage[]
+  variants         ProductVariant[]
+  wishlistedBy     Wishlist[]
+  reviews          Review[]
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
+  @@index([categoryId, isActive])
+  @@index([sellingPrice])
+  @@index([isReadymade])
+  @@index([createdAt])
+}
+
+// ADMIN ONLY. Separate table so a customer-facing findMany() cannot leak it.
+model ProductCost {
+  id           String   @id @default(cuid())
+  productId    String   @unique
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  costPrice    Decimal  @db.Decimal(10, 2)
+  supplierName String?
+  purchaseNote String?
+  updatedAt    DateTime @updatedAt
+}
+
+model Attribute {
+  id           String             @id @default(cuid())
+  name         String             @unique
+  slug         String             @unique
+  inputType    AttributeInputType @default(CHECKBOX)
+  isFilterable Boolean            @default(true)
+  isRequired   Boolean            @default(false)
+  position     Int                @default(0)
+  values       AttributeValue[]
+}
+
+model AttributeValue {
+  id          String                  @id @default(cuid())
+  attributeId String
+  attribute   Attribute               @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  value       String
+  slug        String
+  position    Int                     @default(0)
+  products    ProductAttributeValue[]
+
+  @@unique([attributeId, slug])
+  @@index([attributeId])
+}
+
+model ProductAttributeValue {
+  productId String
+  product   Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  valueId   String
+  value     AttributeValue @relation(fields: [valueId], references: [id], onDelete: Cascade)
+
+  @@id([productId, valueId])
+  @@index([valueId])
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  publicId  String
+  altText   String
+  position  Int
+
+  @@index([productId])
+}
+
+model ProductVariant {
+  id         String      @id @default(cuid())
+  productId  String
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  size       String?
+  sku        String      @unique
+  price      Decimal     @db.Decimal(10, 2)
+  stockQty   Int         @default(0)
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+
+  @@index([productId])
+}
+
+// userId OR sessionId is set - never both, never neither.
+model Wishlist {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId String?
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+  @@unique([sessionId, productId])
+  @@index([sessionId])
+}
+
+model Cart {
+  id        String     @id @default(cuid())
+  userId    String?    @unique
+  user      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId String?    @unique
+  items     CartItem[]
+  updatedAt DateTime   @updatedAt
+}
+
+model CartItem {
+  id        String         @id @default(cuid())
+  cartId    String
+  cart      Cart           @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  variantId String
+  variant   ProductVariant @relation(fields: [variantId], references: [id])
+  quantity  Int
+
+  @@unique([cartId, variantId])
+  @@index([cartId])
+}
+
+model Order {
+  id             String               @id @default(cuid())
+  orderNumber    String               @unique
+  userId         String
+  user           User                 @relation(fields: [userId], references: [id])
+  addressId      String
+  address        Address              @relation(fields: [addressId], references: [id])
+  status         OrderStatus          @default(PENDING)
+  paymentMethod  PaymentMethod
+
+  subtotal       Decimal              @db.Decimal(10, 2)
+  shippingCharge Decimal              @default(0) @db.Decimal(10, 2)
+  taxAmount      Decimal              @default(0) @db.Decimal(10, 2)
+  total          Decimal              @db.Decimal(10, 2)
+
+  courierName    String?
+  trackingNumber String?
+  shippedAt      DateTime?
+  deliveredAt    DateTime?
+
+  items          OrderItem[]
+  payment        Payment?
+  statusHistory  OrderStatusHistory[]
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id           String         @id @default(cuid())
+  orderId      String
+  order        Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variantId    String
+  variant      ProductVariant @relation(fields: [variantId], references: [id])
+  productName  String
+  productImage String
+  size         String?
+  price        Decimal        @db.Decimal(10, 2)
+  costPrice    Decimal        @db.Decimal(10, 2)
+  quantity     Int
+
+  @@index([orderId])
+}
+
+// Only for PREPAID orders. COD orders have no Payment row.
+model Payment {
+  id                String   @id @default(cuid())
+  orderId           String   @unique
+  order             Order    @relation(fields: [orderId], references: [id])
+  razorpayOrderId   String   @unique
+  razorpayPaymentId String?
+  status            String
+  amount            Decimal  @db.Decimal(10, 2)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// Idempotency guard for Razorpay webhook retries.
+model ProcessedWebhookEvent {
+  id          String   @id @default(cuid())
+  eventId     String   @unique
+  eventType   String
+  processedAt DateTime @default(now())
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+  @@index([productId])
+}
+
+model OrderStatusHistory {
+  id          String       @id @default(cuid())
+  orderId     String
+  order       Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fromStatus  OrderStatus?
+  toStatus    OrderStatus
+  changedById String?
+  changedBy   User?        @relation(fields: [changedById], references: [id])
+  note        String?
+  createdAt   DateTime     @default(now())
+
+  @@index([orderId, createdAt])
+}
+
+model OtpCode {
+  id         String     @id @default(cuid())
+  identifier String
+  channel    OtpChannel
+  purpose    OtpPurpose
+  codeHash   String
+  attempts   Int        @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime   @default(now())
+
+  @@index([identifier, purpose, createdAt])
+  @@index([expiresAt])
+}
+
+model SetupToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionToken String   @unique
+  userAgent    String?
+  ipAddress    String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+}
