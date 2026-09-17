@@ -18,12 +18,21 @@ export type VariantOption = {
 
 const LOW_STOCK_THRESHOLD = 3;
 
+/** A variant with no size recorded still needs a label to pick. */
+function labelFor(variant: VariantOption): string {
+  return variant.size ?? "Free Size";
+}
+
 /**
- * Size picker plus the buy actions. Selection and the actions live in one
- * component because "add to bag" needs to know which size is chosen.
+ * Size picker plus the buy actions.
  *
- * Stock shown here is only a hint; the server re-checks on every add and is
- * the one that can refuse (spec 7).
+ * SIZE IS ALWAYS REQUIRED. Nothing is pre-selected and "Add to bag" stays
+ * disabled until the shopper picks an option — even when a product has only
+ * one. A garment cannot be packed without knowing which size was meant, so the
+ * choice has to be deliberate rather than defaulted.
+ *
+ * The wishlist is different on purpose: saving something for later does not
+ * commit to a size, so the heart works with nothing selected.
  */
 export function ProductActions({
   productId,
@@ -32,9 +41,10 @@ export function ProductActions({
   productId: string;
   variants: VariantOption[];
 }) {
-  const firstAvailable = variants.find((variant) => variant.stockQty > 0) ?? variants[0];
-  const [selectedId, setSelectedId] = useState(firstAvailable?.id ?? "");
+  // Deliberately empty: no default selection.
+  const [selectedId, setSelectedId] = useState("");
   const [justAdded, setJustAdded] = useState(false);
+  const [showSizeHint, setShowSizeHint] = useState(false);
 
   const addToCart = useCartStore((state) => state.add);
   const cartError = useCartStore((state) => state.error);
@@ -42,12 +52,13 @@ export function ProductActions({
   const isAdding = useCartStore((state) => state.pending[selectedId] ?? false);
 
   const toggleWishlist = useWishlistStore((state) => state.toggle);
-  const saved = useWishlistStore((state) => state.wishlist.productIds.includes(productId));
+  const saved = useWishlistStore((state) =>
+    state.wishlist.productIds.includes(productId),
+  );
   const isSaving = useWishlistStore((state) => state.pending[productId] ?? false);
 
-  const selected = variants.find((variant) => variant.id === selectedId) ?? firstAvailable;
+  const selected = variants.find((variant) => variant.id === selectedId) ?? null;
 
-  // Clear the "Added" confirmation after a moment.
   useEffect(() => {
     if (!justAdded) return;
     const timer = setTimeout(() => setJustAdded(false), 2500);
@@ -62,71 +73,96 @@ export function ProductActions({
     );
   }
 
-  // A saree with no sizes is a single variant; a one-button "picker" would be
-  // noise, so only the stock line is shown.
-  const isSingleUnsized = variants.length === 1 && variants[0]!.size === null;
-  const soldOut = !selected || selected.stockQty <= 0;
+  const anyInStock = variants.some((variant) => variant.stockQty > 0);
 
   async function onAdd() {
-    if (!selected) return;
+    if (!selected) {
+      setShowSizeHint(true);
+      return;
+    }
+
     const ok = await addToCart(selected.id, 1);
     if (ok) setJustAdded(true);
   }
 
   return (
     <div className="space-y-4">
-      {!isSingleUnsized ? (
-        <fieldset>
-          <legend className="mb-2 text-sm font-medium">Size</legend>
-          <div className="flex flex-wrap gap-2">
-            {variants.map((variant) => {
-              const variantSoldOut = variant.stockQty <= 0;
-              const isSelected = variant.id === selected?.id;
+      <fieldset>
+        <legend className="mb-2 text-sm font-medium">
+          Size
+          <span aria-hidden className="ml-1 text-destructive">
+            *
+          </span>
+          <span className="sr-only">(required)</span>
+        </legend>
 
-              return (
-                <button
-                  key={variant.id}
-                  type="button"
-                  disabled={variantSoldOut}
-                  onClick={() => {
-                    setSelectedId(variant.id);
-                    setJustAdded(false);
-                  }}
-                  aria-pressed={isSelected}
-                  className={cn(
-                    "min-w-14 rounded-md border px-3 py-2 text-sm transition",
-                    "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none",
-                    isSelected &&
-                      !variantSoldOut &&
-                      "border-foreground bg-foreground text-background",
-                    variantSoldOut &&
-                      "cursor-not-allowed text-muted-foreground line-through opacity-50",
-                  )}
-                >
-                  {variant.size ?? "One size"}
-                </button>
-              );
-            })}
-          </div>
-        </fieldset>
-      ) : null}
+        <div className="flex flex-wrap gap-2">
+          {variants.map((variant) => {
+            const soldOut = variant.stockQty <= 0;
+            const isSelected = variant.id === selectedId;
+
+            return (
+              <button
+                key={variant.id}
+                type="button"
+                disabled={soldOut}
+                onClick={() => {
+                  setSelectedId(variant.id);
+                  setShowSizeHint(false);
+                  setJustAdded(false);
+                }}
+                aria-pressed={isSelected}
+                aria-label={
+                  soldOut
+                    ? `${labelFor(variant)} — out of stock`
+                    : labelFor(variant)
+                }
+                className={cn(
+                  "min-w-16 rounded-md border px-3 py-2 text-sm transition",
+                  "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none",
+                  // Chosen
+                  isSelected &&
+                    !soldOut &&
+                    "border-foreground bg-foreground text-background",
+                  // Available, not chosen
+                  !isSelected && !soldOut && "hover:border-foreground/40",
+                  // Unavailable: struck through with a single line, and greyed
+                  // back so it reads as "exists, but not right now".
+                  soldOut &&
+                    "cursor-not-allowed border-muted bg-muted/30 text-muted-foreground/60 line-through decoration-1",
+                )}
+              >
+                {labelFor(variant)}
+              </button>
+            );
+          })}
+        </div>
+      </fieldset>
 
       {selected ? (
         <p className="text-sm" aria-live="polite">
-          {soldOut ? (
-            <span className="font-medium text-destructive">Out of stock</span>
-          ) : selected.stockQty <= LOW_STOCK_THRESHOLD ? (
+          {selected.stockQty <= LOW_STOCK_THRESHOLD ? (
             <span className="font-medium text-amber-700 dark:text-amber-500">
               Only {selected.stockQty} left
             </span>
           ) : (
             <span className="text-muted-foreground">In stock</span>
           )}
-          {!isSingleUnsized && !soldOut ? (
-            <span className="text-muted-foreground"> · {formatInr(selected.price)}</span>
-          ) : null}
+          <span className="text-muted-foreground"> · {formatInr(selected.price)}</span>
         </p>
-      ) : null}
+      ) : (
+        <p
+          className={cn(
+            "text-sm",
+            showSizeHint ? "font-medium text-destructive" : "text-muted-foreground",
+          )}
+          aria-live="polite"
+        >
+          {anyInStock
+            ? "Please select a size to continue."
+            : "Every size is currently out of stock."}
+        </p>
+      )}
 
       {cartError ? (
         <Alert variant="destructive" role="alert">
@@ -148,7 +184,9 @@ export function ProductActions({
           type="button"
           className="flex-1"
           size="lg"
-          disabled={soldOut || isAdding}
+          // Disabled without a size, so the requirement is visible rather than
+          // only enforced after a click.
+          disabled={!anyInStock || !selected || isAdding}
           onClick={() => void onAdd()}
         >
           {isAdding ? (
@@ -161,13 +199,16 @@ export function ProductActions({
               <Check className="size-4" aria-hidden />
               Added to bag
             </>
-          ) : soldOut ? (
+          ) : !anyInStock ? (
             "Out of stock"
+          ) : !selected ? (
+            "Select a size"
           ) : (
             "Add to bag"
           )}
         </Button>
 
+        {/* No size needed to save something for later. */}
         <Button
           type="button"
           variant="outline"

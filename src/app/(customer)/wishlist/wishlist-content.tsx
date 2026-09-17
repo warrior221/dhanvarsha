@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { Price } from "@/components/shared/price";
@@ -9,7 +9,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { WishlistProductView } from "@/lib/queries/product";
-import { useCartStore } from "@/store/cart-store";
 import { useWishlistStore } from "@/store/wishlist-store";
 
 export function WishlistContent() {
@@ -80,16 +79,7 @@ function WishlistCard({ product }: { product: WishlistProductView }) {
   const removeFromWishlist = useWishlistStore((state) => state.remove);
   const isRemoving = useWishlistStore((state) => state.pending[product.id] ?? false);
 
-  const addToCart = useCartStore((state) => state.add);
-  const cartPending = useCartStore((state) => state.pending);
-
   const inStock = product.variants.filter((variant) => variant.stockQty > 0);
-
-  // With one option we can move it straight to the bag. With several, the
-  // shopper has to pick a size, so send them to the product page instead of
-  // guessing one for them.
-  const onlyOption = inStock.length === 1 ? inStock[0]! : null;
-  const isAdding = onlyOption ? (cartPending[onlyOption.id] ?? false) : false;
 
   return (
     <li className="group flex flex-col">
@@ -129,26 +119,14 @@ function WishlistCard({ product }: { product: WishlistProductView }) {
           <Button variant="outline" size="sm" className="flex-1" disabled>
             Sold out
           </Button>
-        ) : onlyOption ? (
-          <Button
-            type="button"
-            size="sm"
-            className="flex-1"
-            disabled={isAdding}
-            onClick={() => void addToCart(onlyOption.id, 1)}
-          >
-            {isAdding ? (
-              <>
-                <Loader2 className="size-3.5 animate-spin" aria-hidden />
-                Adding…
-              </>
-            ) : (
-              "Move to bag"
-            )}
-          </Button>
         ) : (
-          <Button asChild size="sm" variant="outline" className="flex-1">
-            <Link href={`/products/${product.slug}`}>Choose size</Link>
+          /*
+            Saving needs no size, but moving to the bag does — so this always
+            sends the shopper to the product page to choose, rather than
+            picking a size on their behalf.
+          */
+          <Button asChild size="sm" className="flex-1">
+            <Link href={`/products/${product.slug}`}>Select size</Link>
           </Button>
         )}
 
