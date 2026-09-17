@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { WishlistHeart } from "@/components/product/wishlist-heart";
 import { Price } from "@/components/shared/price";
 import type { ProductCardView } from "@/lib/queries/product";
 
@@ -13,7 +14,9 @@ export function ProductCard({
   const soldOut = product.totalStock <= 0;
 
   return (
-    <article className="group">
+    <article className="group relative">
+      <WishlistHeart productId={product.id} productName={product.name} />
+
       <Link href={`/products/${product.slug}`} className="block focus:outline-none">
         <div className="relative aspect-[2/3] overflow-hidden rounded-lg bg-muted">
           {product.image ? (

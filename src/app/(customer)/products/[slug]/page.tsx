@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ProductGallery } from "@/components/product/product-gallery";
-import { VariantPicker } from "@/components/product/variant-picker";
+import { ProductActions } from "@/components/product/product-actions";
 import { Price } from "@/components/shared/price";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -124,7 +124,7 @@ export default async function ProductDetailPage(
 
           <Separator />
 
-          <VariantPicker variants={product.variants} />
+          <ProductActions productId={product.id} variants={product.variants} />
 
           <Separator />
 

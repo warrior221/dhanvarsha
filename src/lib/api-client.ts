@@ -22,13 +22,25 @@ export class ApiError extends Error {
 }
 
 export async function postJson<T>(url: string, body: unknown): Promise<T> {
+  return requestJson<T>(url, "POST", body);
+}
+
+export async function getJson<T>(url: string): Promise<T> {
+  return requestJson<T>(url, "GET");
+}
+
+export async function requestJson<T>(
+  url: string,
+  method: "GET" | "POST" | "PATCH" | "DELETE",
+  body?: unknown,
+): Promise<T> {
   let response: Response;
 
   try {
     response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      method,
+      headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
     throw new ApiError(

@@ -64,6 +64,33 @@ export const productCardSelect = {
   variants: { select: { stockQty: true } },
 } as const satisfies Prisma.ProductSelect;
 
+
+/**
+ * Wishlist cards need variant ids so "move to bag" can add the right one
+ * directly when a product has only a single option.
+ */
+export const wishlistProductSelect = {
+  ...productCardSelect,
+  variants: { select: { id: true, size: true, stockQty: true } },
+} as const satisfies Prisma.ProductSelect;
+
+type RawWishlistProduct = Prisma.ProductGetPayload<{
+  select: typeof wishlistProductSelect;
+}>;
+
+export type WishlistProductView = ProductCardView & {
+  variants: { id: string; size: string | null; stockQty: number }[];
+};
+
+export function toWishlistProductView(
+  product: RawWishlistProduct,
+): WishlistProductView {
+  return {
+    ...toProductCardView(product),
+    variants: [...product.variants].sort(compareVariants),
+  };
+}
+
 /** Admin queries opt IN to cost price. Never use this on a customer route. */
 export const adminProductSelect = {
   ...publicProductSelect,

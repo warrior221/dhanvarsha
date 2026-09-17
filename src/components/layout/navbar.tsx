@@ -1,7 +1,9 @@
+import { Heart } from "lucide-react";
 import Link from "next/link";
+import { CartDrawer } from "@/components/cart/cart-drawer";
 import { Button } from "@/components/ui/button";
-import { getOptionalUser } from "@/lib/auth-guards";
 import { logoutAction } from "@/lib/auth-actions";
+import { getOptionalUser } from "@/lib/auth-guards";
 import { db } from "@/lib/db";
 
 export async function Navbar() {
@@ -36,6 +38,15 @@ export async function Navbar() {
         </nav>
 
         <div className="flex items-center gap-2">
+          <Button asChild variant="ghost" size="sm" aria-label="Wishlist">
+            <Link href="/wishlist">
+              <Heart className="size-4" aria-hidden />
+              <span className="sr-only sm:not-sr-only">Saved</span>
+            </Link>
+          </Button>
+
+          <CartDrawer />
+
           {user ? (
             <>
               {user.role === "ADMIN" ? (
