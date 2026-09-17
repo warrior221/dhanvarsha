@@ -1,6 +1,7 @@
 import { Role } from "@prisma/client";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { AdminNav } from "@/components/admin/admin-nav";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/auth";
 import { logoutAction } from "@/lib/auth-actions";
@@ -44,13 +45,16 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
   return (
     <div className="min-h-screen bg-muted/30">
       <header className="border-b bg-background">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
           <Link href="/admin" className="text-sm font-bold tracking-[0.18em] text-primary">
             DHANVARSHA ADMIN
           </Link>
 
           <div className="flex items-center gap-3">
-            <span className="hidden text-sm text-muted-foreground sm:inline">
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/">View shop</Link>
+            </Button>
+            <span className="hidden text-sm text-muted-foreground lg:inline">
               {session.user.email}
             </span>
             <form action={logoutAction}>
@@ -60,9 +64,11 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
             </form>
           </div>
         </div>
+
+        <AdminNav />
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
+      <main className="mx-auto max-w-7xl px-4 py-8">{children}</main>
     </div>
   );
 }
