@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import { destroyImage } from "@/lib/imagekit";
 import { toPaise } from "@/lib/format";
 import type { ProductFormInput } from "@/lib/validations/product";
 
@@ -290,7 +291,11 @@ export async function createProduct(input: ProductFormInput): Promise<string> {
 export async function updateProduct(id: string, input: ProductFormInput): Promise<void> {
   const existing = await db.product.findUnique({
     where: { id },
-    select: { id: true, variants: { select: { id: true, sku: true } } },
+    select: {
+      id: true,
+      variants: { select: { id: true, sku: true } },
+      images: { select: { publicId: true } },
+    },
   });
 
   if (!existing) {
@@ -412,6 +417,17 @@ export async function updateProduct(id: string, input: ProductFormInput): Promis
       });
     }
   });
+
+  // Photos dropped from the product are now orphans in the media library.
+  // Cleared AFTER the transaction commits: a failed save must not delete
+  // images the product still points at. Failures here are logged, not thrown —
+  // a stale file is untidy, a failed save is not.
+  const keptPublicIds = new Set(input.images.map((image) => image.publicId));
+  const orphans = existing.images
+    .map((image) => image.publicId)
+    .filter((publicId) => !keptPublicIds.has(publicId));
+
+  await Promise.all(orphans.map(destroyImage));
 }
 
 /**
@@ -432,7 +448,15 @@ export async function deleteProduct(id: string): Promise<{ deleted: boolean }> {
     );
   }
 
+  const images = await db.product
+    .findUnique({ where: { id }, select: { images: { select: { publicId: true } } } })
+    .then((product) => product?.images ?? []);
+
   await db.product.delete({ where: { id } });
+
+  // The rows are gone, so nothing references these files any more.
+  await Promise.all(images.map((image) => destroyImage(image.publicId)));
+
   return { deleted: true };
 }
 

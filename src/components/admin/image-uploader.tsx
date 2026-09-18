@@ -1,22 +1,53 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, ImagePlus, X } from "lucide-react";
+import {
+  ImageKitAbortError,
+  ImageKitInvalidRequestError,
+  ImageKitServerError,
+  ImageKitUploadNetworkError,
+  upload,
+} from "@imagekit/next";
+import { ArrowLeft, ArrowRight, ImagePlus, Loader2, X } from "lucide-react";
 import Image from "next/image";
-import { CldUploadWidget, type CloudinaryUploadWidgetResults } from "next-cloudinary";
+import { useRef, useState, type ChangeEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ApiError, requestJson } from "@/lib/api-client";
 
 export type EditableImage = { url: string; publicId: string; altText: string };
 
+type UploadAuth = {
+  token: string;
+  signature: string;
+  expire: number;
+  publicKey: string;
+};
+
 const MAX_IMAGES = 8;
+const MAX_BYTES = 10 * 1024 * 1024;
+const ACCEPTED = ["image/jpeg", "image/png", "image/webp", "image/avif"];
 
 /**
- * Product photos.
+ * Path inside the media library. Deliberately NOT prefixed with the account
+ * name: the URL endpoint already ends in /dhanvarsha, so "/dhanvarsha/products"
+ * nests it twice and yields .../dhanvarsha/dhanvarsha/products/...
  *
- * The browser uploads straight to Cloudinary using a signature minted by
- * /api/admin/upload, so the API secret stays on the server and large files
- * never pass through it.
+ * Declared here rather than imported from @/lib/imagekit, which is a server
+ * module — importing a value from it would pull the private-key code into the
+ * browser bundle.
+ */
+const IMAGEKIT_FOLDER = "/products";
+
+/**
+ * Product photos, uploaded to ImageKit.
+ *
+ * The browser sends each file straight to ImageKit using short-lived
+ * credentials minted by /api/admin/upload, so the private key stays on the
+ * server and large photos never proxy through it.
+ *
+ * ImageKit's `fileId` is stored in ProductImage.publicId — it is what a later
+ * delete needs.
  *
  * Order matters: the first image is the one shown on catalog tiles.
  */
@@ -27,22 +58,77 @@ export function ImageUploader({
   images: EditableImage[];
   onChange: (next: EditableImage[]) => void;
 }) {
-  const configured = Boolean(process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  function handleUpload(result: CloudinaryUploadWidgetResults) {
-    const info = result.info;
+  const configured = Boolean(process.env.NEXT_PUBLIC_IMAGEKIT_PUBLIC_KEY);
+  const remaining = MAX_IMAGES - images.length;
 
-    // `info` is a string for some widget events; only the object form is an
-    // actual uploaded asset.
-    if (!info || typeof info === "string") return;
+  async function onFilesPicked(event: ChangeEvent<HTMLInputElement>) {
+    const picked = [...(event.target.files ?? [])];
+    // Let the same file be chosen again later.
+    event.target.value = "";
 
-    const url = info.secure_url;
-    const publicId = info.public_id;
+    if (picked.length === 0) return;
 
-    if (!url || !publicId) return;
-    if (images.some((image) => image.publicId === publicId)) return;
+    setError(null);
 
-    onChange([...images, { url, publicId, altText: "" }].slice(0, MAX_IMAGES));
+    const tooBig = picked.find((file) => file.size > MAX_BYTES);
+    if (tooBig) {
+      setError(`"${tooBig.name}" is larger than 10 MB. Please compress it first.`);
+      return;
+    }
+
+    const wrongType = picked.find((file) => !ACCEPTED.includes(file.type));
+    if (wrongType) {
+      setError(`"${wrongType.name}" is not a JPG, PNG, WebP or AVIF.`);
+      return;
+    }
+
+    const files = picked.slice(0, remaining);
+    if (picked.length > remaining) {
+      setError(`Only ${remaining} more photo${remaining === 1 ? "" : "s"} can be added.`);
+    }
+
+    setBusy(true);
+    const uploaded: EditableImage[] = [];
+
+    try {
+      for (const [index, file] of files.entries()) {
+        setProgress(`Uploading ${index + 1} of ${files.length}…`);
+
+        // Credentials are single-use, so each file gets its own set.
+        const auth = await requestJson<UploadAuth>("/api/admin/upload", "GET");
+
+        const result = await upload({
+          file,
+          fileName: file.name,
+          folder: IMAGEKIT_FOLDER,
+          useUniqueFileName: true,
+          token: auth.token,
+          signature: auth.signature,
+          expire: auth.expire,
+          publicKey: auth.publicKey,
+        });
+
+        if (!result.url || !result.fileId) {
+          throw new Error("ImageKit did not return a URL for that file.");
+        }
+
+        uploaded.push({ url: result.url, publicId: result.fileId, altText: "" });
+      }
+
+      if (uploaded.length > 0) {
+        onChange([...images, ...uploaded].slice(0, MAX_IMAGES));
+      }
+    } catch (err) {
+      setError(messageFor(err));
+    } finally {
+      setBusy(false);
+      setProgress(null);
+    }
   }
 
   function move(index: number, direction: -1 | 1) {
@@ -128,7 +214,9 @@ export function ImageUploader({
                   className="size-7 text-destructive"
                   aria-label="Remove photo"
                   onClick={() =>
-                    onChange(images.filter((candidate) => candidate.publicId !== image.publicId))
+                    onChange(
+                      images.filter((candidate) => candidate.publicId !== image.publicId),
+                    )
                   }
                 >
                   <X className="size-3.5" aria-hidden />
@@ -139,40 +227,72 @@ export function ImageUploader({
         </ul>
       ) : null}
 
+      {error ? (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
+
       {!configured ? (
         <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-          Image uploads need Cloudinary. Add CLOUDINARY_CLOUD_NAME, API key and
-          secret plus NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME to <code>.env.local</code>.
+          Image uploads need ImageKit. Add IMAGEKIT_PRIVATE_KEY,
+          NEXT_PUBLIC_IMAGEKIT_PUBLIC_KEY and NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT
+          to <code>.env.local</code>.
         </p>
-      ) : images.length >= MAX_IMAGES ? (
+      ) : remaining <= 0 ? (
         <p className="text-sm text-muted-foreground">
           That is the maximum of {MAX_IMAGES} photos.
         </p>
       ) : (
-        <CldUploadWidget
-          signatureEndpoint="/api/admin/upload"
-          options={{
-            folder: "dhanvarsha/products",
-            multiple: true,
-            maxFiles: MAX_IMAGES - images.length,
-            sources: ["local", "url", "camera"],
-            clientAllowedFormats: ["png", "jpg", "jpeg", "webp", "avif"],
-            maxFileSize: 10_000_000,
-          }}
-          onSuccess={handleUpload}
-        >
-          {({ open }) => (
-            <Button type="button" variant="outline" onClick={() => open()}>
-              <ImagePlus className="size-4" aria-hidden />
-              Upload photos
-            </Button>
-          )}
-        </CldUploadWidget>
+        <div>
+          <input
+            ref={inputRef}
+            type="file"
+            accept={ACCEPTED.join(",")}
+            multiple
+            className="sr-only"
+            onChange={(event) => void onFilesPicked(event)}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy}
+            onClick={() => inputRef.current?.click()}
+          >
+            {busy ? (
+              <>
+                <Loader2 className="size-4 animate-spin" aria-hidden />
+                {progress ?? "Uploading…"}
+              </>
+            ) : (
+              <>
+                <ImagePlus className="size-4" aria-hidden />
+                Upload photos
+              </>
+            )}
+          </Button>
+        </div>
       )}
 
       <p className="text-xs text-muted-foreground">
-        The first photo is used on listing tiles. Drag order with the arrows.
+        JPG, PNG, WebP or AVIF, up to 10 MB each. The first photo is used on
+        listing tiles — reorder with the arrows.
       </p>
     </div>
   );
+}
+
+function messageFor(error: unknown): string {
+  if (error instanceof ApiError) return error.message;
+  if (error instanceof ImageKitAbortError) return "That upload was cancelled.";
+  if (error instanceof ImageKitInvalidRequestError) {
+    return `ImageKit rejected that file: ${error.message}`;
+  }
+  if (error instanceof ImageKitUploadNetworkError) {
+    return "The upload could not reach ImageKit. Check your connection and try again.";
+  }
+  if (error instanceof ImageKitServerError) {
+    return "ImageKit had a problem. Please try again in a moment.";
+  }
+  return "That upload failed. Please try again.";
 }

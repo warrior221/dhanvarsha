@@ -11,10 +11,8 @@ const nextConfig: NextConfig = {
 
   images: {
     // Only these hosts may be optimised and served. Everything else is blocked.
-    // picsum.photos serves the seed placeholders and goes away once real
-    // product photos are uploaded through Cloudinary in Phase 8.
     remotePatterns: [
-      new URL("https://res.cloudinary.com/**"),
+      new URL("https://ik.imagekit.io/**"),
       // Seed placeholders; they go once real photos are uploaded.
       new URL("https://picsum.photos/**"),
     ],
