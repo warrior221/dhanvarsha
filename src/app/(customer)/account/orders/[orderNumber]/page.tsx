@@ -123,12 +123,13 @@ export default async function OrderDetailPage(
           <div className="flex justify-between">
             <dt className="text-muted-foreground">Delivery</dt>
             <dd className="tabular-nums">
-              {order.shippingCharge === "0.00"
+              {toPaise(order.shippingCharge) === 0
                 ? "Free"
                 : formatInr(order.shippingCharge)}
             </dd>
           </div>
-          {order.taxAmount !== "0.00" ? (
+          {/* Compared in paise: Prisma renders zero as "0", not "0.00". */}
+          {toPaise(order.taxAmount) > 0 ? (
             <div className="flex justify-between">
               <dt className="text-muted-foreground">
                 {taxWasIncluded(order) ? "Includes GST" : "GST"}

@@ -1,6 +1,5 @@
 import { OtpChannel, OtpPurpose } from "@prisma/client";
 import type { NextRequest } from "next/server";
-import { getOptionalUser } from "@/lib/auth-guards";
 import { db } from "@/lib/db";
 import { AppError, apiSuccess, handleApiError } from "@/lib/errors";
 import { sendOtp } from "@/lib/otp";
@@ -50,30 +49,6 @@ export async function POST(request: NextRequest) {
         "WhatsApp verification is not available yet.",
         501,
       );
-    }
-
-    /* ---------------- confirming a cash-on-delivery order ---------------- */
-    if (purpose === OtpPurpose.COD_CONFIRMATION) {
-      // Always the signed-in user's own address. The identifier in the body is
-      // deliberately ignored, so this cannot be used to mail anyone else.
-      const user = await getOptionalUser();
-
-      if (!user?.email) {
-        throw new AppError("UNAUTHORIZED", "Please sign in to continue.", 401);
-      }
-
-      await enforceRateLimit("otpSend", `id:${user.email}`);
-
-      await sendOtp({
-        identifier: user.email,
-        channel: OtpChannel.EMAIL,
-        purpose: OtpPurpose.COD_CONFIRMATION,
-      });
-
-      return apiSuccess({
-        message: `We sent a confirmation code to ${user.email}.`,
-        sentTo: user.email,
-      });
     }
 
     /* ------------------------- verification codes ------------------------ */

@@ -3,12 +3,10 @@
 import { Check, Loader2, Plus } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AddressForm } from "@/components/checkout/address-form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { ApiError, requestJson } from "@/lib/api-client";
 import type { CartView } from "@/lib/cart";
@@ -18,17 +16,19 @@ import type { OrderTotals } from "@/lib/queries/checkout";
 import { cn } from "@/lib/utils";
 import { useCartStore } from "@/store/cart-store";
 
-const RESEND_COOLDOWN_SECONDS = 60;
-
 /**
- * Cash-on-delivery checkout.
+ * Cash-on-delivery checkout: choose the payment method, choose the address,
+ * place the order.
  *
  * Card and UPI payment (Razorpay) is not wired up yet, so COD is the only
- * method offered rather than showing a option that cannot complete.
+ * method offered rather than showing an option that cannot complete.
  *
- * Before the order is placed, a code is emailed and must be entered. That is
- * spec section 7's COD confirmation step — it exists because an unconfirmed
- * COD order commits real stock to someone who may never have ordered it.
+ * There is NO confirmation code here. Spec section 7 put one at checkout to
+ * stop an anonymous stranger committing real stock to a cash order, but an
+ * account cannot sign in at all until its email is verified
+ * (see the emailVerified check in lib/auth.ts), and checkout requires being
+ * signed in. The identity is therefore already proven before this page loads,
+ * and a second code re-proved the same fact.
  */
 export function CheckoutClient({
   addresses,
@@ -48,48 +48,12 @@ export function CheckoutClient({
   );
   const [showForm, setShowForm] = useState(addresses.length === 0);
 
-  const [codeSent, setCodeSent] = useState(false);
-  const [sentTo, setSentTo] = useState<string | null>(null);
-  const [code, setCode] = useState("");
-  const [cooldown, setCooldown] = useState(0);
-
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (cooldown <= 0) return;
-    const timer = setTimeout(() => setCooldown((n) => n - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [cooldown]);
-
-  async function sendCode() {
+  async function placeOrder() {
     if (!selectedId) {
       setError("Choose a delivery address first.");
-      return;
-    }
-
-    setBusy(true);
-    setError(null);
-
-    try {
-      const result = await requestJson<{ message: string; sentTo: string }>(
-        "/api/otp/send",
-        "POST",
-        { identifier: "cod", purpose: "COD_CONFIRMATION" },
-      );
-      setCodeSent(true);
-      setSentTo(result.sentTo);
-      setCooldown(RESEND_COOLDOWN_SECONDS);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not send the code.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function placeOrder() {
-    if (!/^\d{6}$/.test(code.trim())) {
-      setError("Enter the 6-digit code from your email.");
       return;
     }
 
@@ -100,7 +64,7 @@ export function CheckoutClient({
       const order = await requestJson<{ orderNumber: string; total: string }>(
         "/api/checkout/cod",
         "POST",
-        { addressId: selectedId, code: code.trim() },
+        { addressId: selectedId },
       );
 
       // The bag is now an order; keep the badge honest.
@@ -115,6 +79,23 @@ export function CheckoutClient({
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_22rem]">
       <div className="space-y-6">
+        {/* ------------------------- payment ------------------------- */}
+        <section className="space-y-3 rounded-lg border bg-background p-5">
+          <h2 className="text-lg font-medium">Payment</h2>
+
+          <div className="rounded-md border border-foreground bg-muted/50 p-3 text-sm">
+            <p className="font-medium">Cash on delivery</p>
+            <p className="text-muted-foreground">
+              Pay the courier when your order arrives.
+            </p>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            Card, UPI and netbanking will appear here once online payment is set
+            up.
+          </p>
+        </section>
+
         {/* ------------------------- address ------------------------- */}
         <section className="space-y-4 rounded-lg border bg-background p-5">
           <h2 className="text-lg font-medium">Delivery address</h2>
@@ -187,105 +168,43 @@ export function CheckoutClient({
           )}
         </section>
 
-        {/* ------------------------- payment ------------------------- */}
-        <section className="space-y-3 rounded-lg border bg-background p-5">
-          <h2 className="text-lg font-medium">Payment</h2>
-
-          <div className="rounded-md border border-foreground bg-muted/50 p-3 text-sm">
-            <p className="font-medium">Cash on delivery</p>
-            <p className="text-muted-foreground">
-              Pay the courier when your order arrives.
-            </p>
-          </div>
-
-          <p className="text-xs text-muted-foreground">
-            Card, UPI and netbanking will appear here once online payment is set
-            up.
-          </p>
-        </section>
-
-        {/* ---------------------- confirmation ----------------------- */}
+        {/* ----------------------- place order ----------------------- */}
         <section className="space-y-4 rounded-lg border bg-background p-5">
-          <h2 className="text-lg font-medium">Confirm your order</h2>
+          <h2 className="text-lg font-medium">Place your order</h2>
 
-          {!codeSent ? (
-            <>
-              <p className="text-sm text-muted-foreground">
-                We will email you a 6-digit code to confirm this cash-on-delivery
-                order.
-              </p>
-              <Button
-                type="button"
-                disabled={busy || !selectedId}
-                onClick={() => void sendCode()}
-              >
-                {busy ? (
-                  <>
-                    <Loader2 className="size-4 animate-spin" aria-hidden />
-                    Sending…
-                  </>
-                ) : (
-                  "Email me a confirmation code"
-                )}
-              </Button>
-            </>
-          ) : (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="cod-code">6-digit code</Label>
-                <Input
-                  id="cod-code"
-                  value={code}
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  placeholder="000000"
-                  className="max-w-40 text-center text-lg tracking-[0.4em]"
-                  onChange={(event) =>
-                    setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
-                  }
-                />
-                <p className="text-sm text-muted-foreground">
-                  Sent to {sentTo}. The code expires in 10 minutes.
-                </p>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  size="lg"
-                  disabled={busy || code.length !== 6}
-                  onClick={() => void placeOrder()}
-                >
-                  {busy ? (
-                    <>
-                      <Loader2 className="size-4 animate-spin" aria-hidden />
-                      Placing order…
-                    </>
-                  ) : (
-                    <>
-                      <Check className="size-4" aria-hidden />
-                      Place order · {totals.totalFormatted}
-                    </>
-                  )}
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="ghost"
-                  disabled={busy || cooldown > 0}
-                  onClick={() => void sendCode()}
-                >
-                  {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend code"}
-                </Button>
-              </div>
-            </>
-          )}
+          <p className="text-sm text-muted-foreground">
+            Pay {totals.totalFormatted} in cash when the courier arrives.
+          </p>
 
           {error ? (
             <Alert variant="destructive" role="alert">
               <AlertDescription>{error}</AlertDescription>
             </Alert>
+          ) : null}
+
+          <Button
+            type="button"
+            size="lg"
+            disabled={busy || !selectedId}
+            onClick={() => void placeOrder()}
+          >
+            {busy ? (
+              <>
+                <Loader2 className="size-4 animate-spin" aria-hidden />
+                Placing order…
+              </>
+            ) : (
+              <>
+                <Check className="size-4" aria-hidden />
+                Place order · {totals.totalFormatted}
+              </>
+            )}
+          </Button>
+
+          {!selectedId ? (
+            <p className="text-sm text-muted-foreground">
+              Choose a delivery address above first.
+            </p>
           ) : null}
         </section>
       </div>

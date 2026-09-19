@@ -1,8 +1,6 @@
-import { OtpPurpose } from "@prisma/client";
 import type { NextRequest } from "next/server";
 import { requireUser } from "@/lib/auth-guards";
-import { AppError, apiSuccess, handleApiError } from "@/lib/errors";
-import { verifyOtp } from "@/lib/otp";
+import { apiSuccess, handleApiError } from "@/lib/errors";
 import { placeCodOrder } from "@/lib/queries/checkout";
 import { clientIpFrom, enforceRateLimit } from "@/lib/rate-limit";
 import { codOrderSchema } from "@/lib/validations/checkout";
@@ -16,8 +14,10 @@ const ROUTE = "POST /api/checkout/cod";
  * server-side from the cart and the shipping rules, so a tampered price cannot
  * reach an order (spec 8.4).
  *
- * The confirmation code is consumed here rather than through /api/otp/verify,
- * so a code cannot be burned by a request that then fails to place an order.
+ * Identity is established by requireUser(). An account cannot sign in until
+ * its email is verified, so reaching this route already proves the customer
+ * controls the address on the account — which is what the old per-order
+ * confirmation code proved a second time.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -28,22 +28,7 @@ export async function POST(request: NextRequest) {
     await enforceRateLimit("codOrder", `user:${user.id}`);
 
     const body: unknown = await request.json();
-    const { addressId, code } = codOrderSchema.parse(body);
-
-    if (!user.email) {
-      throw new AppError(
-        "NO_EMAIL",
-        "Your account has no email address to confirm against.",
-        400,
-      );
-    }
-
-    // Throws unless the code is live, unexpired and has attempts left.
-    await verifyOtp({
-      identifier: user.email,
-      purpose: OtpPurpose.COD_CONFIRMATION,
-      code,
-    });
+    const { addressId } = codOrderSchema.parse(body);
 
     // Stock, order, audit trail and cart clearing all happen in one
     // transaction (spec 1.5 / 8.5).

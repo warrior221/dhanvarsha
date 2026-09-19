@@ -69,12 +69,13 @@ export const setPasswordSchema = z
 
 export const otpSendSchema = z.object({
   identifier: z.string().trim().min(1, "Missing identifier."),
-  purpose: z.enum([
-    "EMAIL_VERIFICATION",
-    "PHONE_VERIFICATION",
-    "COD_CONFIRMATION",
-    "PASSWORD_RESET",
-  ]),
+  /**
+   * COD_CONFIRMATION is deliberately absent. Checkout no longer sends a
+   * per-order code, and leaving the purpose callable would keep an endpoint
+   * that mails any registered address on request. The database enum still
+   * has the value so historical OtpCode rows stay readable.
+   */
+  purpose: z.enum(["EMAIL_VERIFICATION", "PHONE_VERIFICATION", "PASSWORD_RESET"]),
 });
 
 export const otpVerifySchema = otpSendSchema.extend({

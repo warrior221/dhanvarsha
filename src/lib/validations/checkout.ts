@@ -85,11 +85,6 @@ export type AddressInput = z.infer<typeof addressSchema>;
  */
 export const codOrderSchema = z.object({
   addressId: z.string().trim().min(1).max(64),
-  /** The 6-digit code sent to confirm the order is genuine. */
-  code: z
-    .string()
-    .trim()
-    .regex(/^\d{6}$/, "Enter the 6-digit confirmation code."),
 });
 
 export type CodOrderInput = z.infer<typeof codOrderSchema>;
