@@ -161,6 +161,10 @@ export type AdminOrderDetail = {
   }[];
   subtotalFormatted: string;
   shippingFormatted: string;
+  /** Null when the order carried no GST. */
+  taxFormatted: string | null;
+  /** True when the GST sat inside the prices rather than on top. */
+  taxIncluded: boolean;
   totalFormatted: string;
   profitFormatted: string;
   marginPercent: number | null;
@@ -188,6 +192,7 @@ export async function getAdminOrder(
       paymentMethod: true,
       subtotal: true,
       shippingCharge: true,
+      taxAmount: true,
       total: true,
       courierName: true,
       trackingNumber: true,
@@ -257,6 +262,15 @@ export async function getAdminOrder(
     }),
     subtotalFormatted: formatInr(order.subtotal.toString()),
     shippingFormatted: formatInr(order.shippingCharge.toString()),
+    taxFormatted:
+      toPaise(order.taxAmount.toString()) > 0
+        ? formatInr(order.taxAmount.toString())
+        : null,
+    // Derived from this order's own figures, so it stays right after the
+    // shop changes its tax settings.
+    taxIncluded:
+      totalPaise === toPaise(order.subtotal.toString()) +
+        toPaise(order.shippingCharge.toString()),
     totalFormatted: formatInr(order.total.toString()),
     profitFormatted: formatInr(profit),
     marginPercent: totalPaise > 0 ? Math.round((profitPaise / totalPaise) * 100) : null,

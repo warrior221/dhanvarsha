@@ -117,6 +117,9 @@ export default async function AdminProductsPage(props: PageProps<"/admin/product
                         </Link>
                         <p className="text-xs text-muted-foreground">
                           {row.sku} · {row.categoryName}
+                          {/* Admin only: supplier lives in the protected cost
+                              table, so no customer query can reach it. */}
+                          {row.supplierName ? ` · from ${row.supplierName}` : ""}
                         </p>
                       </div>
                     </div>

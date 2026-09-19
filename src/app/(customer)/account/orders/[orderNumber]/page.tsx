@@ -9,8 +9,8 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { requireUser } from "@/lib/auth-guards";
-import { formatInr } from "@/lib/format";
-import { getCustomerOrder } from "@/lib/queries/orders";
+import { formatInr, toPaise } from "@/lib/format";
+import { getCustomerOrder, type OrderDetailView } from "@/lib/queries/orders";
 
 export const metadata: Metadata = {
   title: "Order",
@@ -128,6 +128,14 @@ export default async function OrderDetailPage(
                 : formatInr(order.shippingCharge)}
             </dd>
           </div>
+          {order.taxAmount !== "0.00" ? (
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">
+                {taxWasIncluded(order) ? "Includes GST" : "GST"}
+              </dt>
+              <dd className="tabular-nums">{formatInr(order.taxAmount)}</dd>
+            </div>
+          ) : null}
           <div className="flex justify-between border-t pt-2 text-base font-semibold">
             <dt>Total</dt>
             <dd className="tabular-nums">{formatInr(order.total)}</dd>
@@ -175,5 +183,18 @@ export default async function OrderDetailPage(
         </section>
       </div>
     </main>
+  );
+}
+
+/**
+ * Whether the GST on this order sat inside the prices or was added on top.
+ *
+ * Derived from the figures the order was placed with rather than from today's
+ * settings, so an old order still describes itself correctly after the shop
+ * changes how it handles tax.
+ */
+function taxWasIncluded(order: OrderDetailView): boolean {
+  return (
+    toPaise(order.total) === toPaise(order.subtotal) + toPaise(order.shippingCharge)
   );
 }

@@ -344,6 +344,14 @@ export function CheckoutClient({
               <dd className="tabular-nums">{totals.codFeeFormatted}</dd>
             </div>
           ) : null}
+          {/* Inclusive GST is shown for information only — it is already
+              inside the subtotal, so adding it here would read as a charge. */}
+          {totals.taxLabel && totals.taxFormatted ? (
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">{totals.taxLabel}</dt>
+              <dd className="tabular-nums">{totals.taxFormatted}</dd>
+            </div>
+          ) : null}
         </dl>
 
         {totals.freeShippingGap ? (
@@ -361,7 +369,12 @@ export function CheckoutClient({
         </div>
 
         <p className="text-xs text-muted-foreground">
-          Prices include GST. Payable in cash on delivery.
+          {totals.taxLabel
+            ? totals.taxIncluded
+              ? "Prices include GST. "
+              : "GST is added above. "
+            : ""}
+          Payable in cash on delivery.
         </p>
       </aside>
     </div>

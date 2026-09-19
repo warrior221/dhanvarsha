@@ -108,6 +108,14 @@ export default async function AdminOrderDetailPage(
                 <dt className="text-muted-foreground">Delivery</dt>
                 <dd className="tabular-nums">{order.shippingFormatted}</dd>
               </div>
+              {order.taxFormatted ? (
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">
+                    {order.taxIncluded ? "Includes GST" : "GST"}
+                  </dt>
+                  <dd className="tabular-nums">{order.taxFormatted}</dd>
+                </div>
+              ) : null}
               <div className="flex justify-between border-t pt-2 font-semibold">
                 <dt>Total</dt>
                 <dd className="tabular-nums">{order.totalFormatted}</dd>

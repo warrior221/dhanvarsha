@@ -93,11 +93,23 @@ type DeliverInput = SendOtpInput & { code: string };
 async function deliver({ identifier, channel, purpose, code }: DeliverInput): Promise<void> {
   switch (channel) {
     case OtpChannel.EMAIL:
-      await sendEmail({
-        to: identifier,
-        subject: `${code} is your Dhanvarsha verification code`,
-        react: OtpCodeEmail({ code, expiryMinutes: OTP_EXPIRY_MINUTES, purpose }),
-      });
+      try {
+        await sendEmail({
+          to: identifier,
+          subject: `${code} is your Dhanvarsha verification code`,
+          react: OtpCodeEmail({ code, expiryMinutes: OTP_EXPIRY_MINUTES, purpose }),
+        });
+      } catch (error) {
+        // In PRODUCTION a failed send is a failed send: the customer is told
+        // so, and nothing is written to a log where a code could be read.
+        if (process.env.NODE_ENV === "production") throw error;
+
+        // In development the shop cannot be tested at all while Resend's free
+        // tier refuses every address except the account owner's. Printing the
+        // code to the developer's own terminal unblocks that, and this branch
+        // is unreachable once a domain is verified — or in production at all.
+        printDevelopmentFallback(identifier, code, error);
+      }
       return;
 
     case OtpChannel.WHATSAPP:
@@ -107,6 +119,36 @@ async function deliver({ identifier, channel, purpose, code }: DeliverInput): Pr
         501,
       );
   }
+}
+
+/**
+ * Development-only escape hatch. Never called when NODE_ENV is "production".
+ *
+ * Deliberately loud: a code on a terminal is a code someone could read over a
+ * shoulder, so the banner says plainly that this is not how the live shop
+ * behaves.
+ */
+function printDevelopmentFallback(
+  identifier: string,
+  code: string,
+  error: unknown,
+): void {
+  const reason = error instanceof Error ? error.message : "unknown error";
+
+  console.warn(
+    [
+      "",
+      "┌──────────────────────────────────────────────────────────────┐",
+      "│  EMAIL FAILED — showing the code here so you can carry on.   │",
+      "│  This happens in development only. Verify a domain at        │",
+      "│  resend.com/domains and real customers will get the email.   │",
+      "└──────────────────────────────────────────────────────────────┘",
+      `  for:  ${identifier}`,
+      `  code: ${code}`,
+      `  why:  ${reason}`,
+      "",
+    ].join("\n"),
+  );
 }
 
 export type VerifyOtpInput = {

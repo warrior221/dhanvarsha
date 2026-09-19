@@ -388,3 +388,21 @@ model ShippingRule {
 
   @@index([isActive, minSubtotal])
 }
+
+/// Shop-wide settings. Exactly one row, id "store", created on first save.
+///
+/// Tax lives here rather than in code because the GST rate on textiles has
+/// changed before and will change again — the shop owner must be able to
+/// correct it without a developer.
+model StoreSetting {
+  id               String   @id @default("store")
+  /// GST percentage applied to the goods subtotal, e.g. 5.00.
+  gstRate          Decimal  @default(0) @db.Decimal(5, 2)
+  /// True when the displayed price already contains GST, which is how Indian
+  /// retail normally quotes. False adds it on top at checkout.
+  pricesIncludeTax Boolean  @default(true)
+  /// Printed on invoices once the business is registered.
+  gstin            String?
+  legalName        String?
+  updatedAt        DateTime @updatedAt
+}

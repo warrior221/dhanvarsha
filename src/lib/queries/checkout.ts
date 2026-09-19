@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { formatInr, toPaise } from "@/lib/format";
 import { generateOrderNumber } from "@/lib/order-number";
+import { getTaxSettings } from "@/lib/queries/settings";
+import { computeTax, type TaxSettings, taxLineLabel, toBasisPoints } from "@/lib/tax";
 
 /**
  * Checkout: what the order costs, and placing it.
@@ -11,11 +13,11 @@ import { generateOrderNumber } from "@/lib/order-number";
  * Every amount here is recomputed on the server from the database. Nothing the
  * browser sends about price, quantity or total is trusted (spec 8.4).
  *
- * TAX: taxAmount is recorded as 0 because prices are treated as GST-inclusive,
- * which is how Indian retail normally displays them — the MRP on the tag is
- * what the customer pays. If the business needs GST broken out as a separate
- * line on invoices, that is an accounting decision to confirm before go-live,
- * and the Order.taxAmount column is already there to hold it.
+ * TAX: the GST rate, and whether displayed prices already contain it, come
+ * from the StoreSetting row the owner edits in Admin → Settings. With prices
+ * marked inclusive the tax is worked backwards out of the subtotal and the
+ * total is unchanged; with prices marked exclusive it is added on top. Both
+ * are recorded in Order.taxAmount so an invoice can show the split.
  */
 
 export type OrderTotals = {
@@ -29,6 +31,12 @@ export type OrderTotals = {
   /** Shown as its own line, so "free delivery" is not contradicted by a fee. */
   codFeeFormatted: string | null;
   totalFormatted: string;
+  /** "Includes GST (5%)" or "GST (5%)". Null when the rate is 0. */
+  taxLabel: string | null;
+  /** The GST figure, formatted. Null when the rate is 0. */
+  taxFormatted: string | null;
+  /** True when the tax sits inside the subtotal rather than on top of it. */
+  taxIncluded: boolean;
   /** Which shipping rule applied, for display. */
   shippingRuleName: string | null;
   /** How much more to spend to reach the next cheaper shipping tier. */
@@ -73,47 +81,87 @@ async function readCartLines(userId: string): Promise<CartLine[]> {
 }
 
 /**
+ * The shop's charging rules, read once.
+ *
+ * These are loaded BEFORE the order transaction opens and passed in. Neon sits
+ * a long way from here and every round trip inside an interactive transaction
+ * counts against its 5-second budget — a budget that must be spent on taking
+ * stock, not on re-reading settings that cannot change mid-order.
+ */
+type CheckoutConfig = {
+  shippingRules: ShippingRuleSnapshot[];
+  tax: TaxSettings;
+};
+
+type ShippingRuleSnapshot = {
+  name: string;
+  minSubtotal: string;
+  charge: string;
+  codExtraCharge: string;
+};
+
+async function loadCheckoutConfig(): Promise<CheckoutConfig> {
+  const [rules, tax] = await Promise.all([
+    db.shippingRule.findMany({
+      where: { isActive: true },
+      orderBy: { minSubtotal: "asc" },
+      select: {
+        name: true,
+        minSubtotal: true,
+        charge: true,
+        codExtraCharge: true,
+      },
+    }),
+    getTaxSettings(),
+  ]);
+
+  return {
+    shippingRules: rules.map((rule) => ({
+      name: rule.name,
+      minSubtotal: rule.minSubtotal.toString(),
+      charge: rule.charge.toString(),
+      codExtraCharge: rule.codExtraCharge.toString(),
+    })),
+    tax,
+  };
+}
+
+/**
  * Picks the shipping rule with the highest minSubtotal the order reaches, so
  * "free over 2000" naturally beats "99 from 0".
  */
-async function resolveShipping(
+function resolveShipping(
+  rules: ShippingRuleSnapshot[],
   subtotalPaise: number,
   paymentMethod: PaymentMethod,
-): Promise<{
+): {
   chargePaise: number;
   codFeePaise: number;
   ruleName: string | null;
   nextTier: { amountPaise: number; ruleName: string } | null;
-}> {
-  const rules = await db.shippingRule.findMany({
-    where: { isActive: true },
-    orderBy: { minSubtotal: "asc" },
-  });
-
+} {
   if (rules.length === 0) {
     // No rules configured: charge nothing rather than invent a number.
     return { chargePaise: 0, codFeePaise: 0, ruleName: null, nextTier: null };
   }
 
-  let applied = null as (typeof rules)[number] | null;
+  let applied: ShippingRuleSnapshot | null = null;
 
   for (const rule of rules) {
-    if (subtotalPaise >= toPaise(rule.minSubtotal.toString())) applied = rule;
+    if (subtotalPaise >= toPaise(rule.minSubtotal)) applied = rule;
   }
 
   if (!applied) {
     return { chargePaise: 0, codFeePaise: 0, ruleName: null, nextTier: null };
   }
 
-  const base = toPaise(applied.charge.toString());
+  const base = toPaise(applied.charge);
   const cod =
-    paymentMethod === PaymentMethod.COD ? toPaise(applied.codExtraCharge.toString()) : 0;
+    paymentMethod === PaymentMethod.COD ? toPaise(applied.codExtraCharge) : 0;
 
   // Is there a cheaper tier just above? Worth telling the shopper about.
   const cheaperAbove = rules.find(
-    (rule) =>
-      toPaise(rule.minSubtotal.toString()) > subtotalPaise &&
-      toPaise(rule.charge.toString()) < base,
+    (rule) => toPaise(rule.minSubtotal) > subtotalPaise && toPaise(rule.charge) < base,
   );
 
   return {
@@ -122,10 +170,47 @@ async function resolveShipping(
     ruleName: applied.name,
     nextTier: cheaperAbove
       ? {
-          amountPaise: toPaise(cheaperAbove.minSubtotal.toString()) - subtotalPaise,
+          amountPaise: toPaise(cheaperAbove.minSubtotal) - subtotalPaise,
           ruleName: cheaperAbove.name,
         }
       : null,
+  };
+}
+
+/**
+ * Works out the GST on a goods subtotal using the shop's current settings.
+ *
+ * `addedPaise` is what the tax adds to the bill: zero when prices already
+ * include it. Keeping that separate from `taxPaise` is what stops an
+ * inclusive-tax shop charging the tax twice.
+ */
+function resolveTax(
+  settings: TaxSettings,
+  subtotalPaise: number,
+): {
+  taxPaise: number;
+  addedPaise: number;
+  label: string | null;
+  inclusive: boolean;
+} {
+  const basisPoints = toBasisPoints(settings.gstRate);
+
+  if (basisPoints <= 0) {
+    return {
+      taxPaise: 0,
+      addedPaise: 0,
+      label: null,
+      inclusive: settings.pricesIncludeTax,
+    };
+  }
+
+  const breakdown = computeTax(subtotalPaise, basisPoints, settings.pricesIncludeTax);
+
+  return {
+    taxPaise: breakdown.taxPaise,
+    addedPaise: settings.pricesIncludeTax ? 0 : breakdown.taxPaise,
+    label: taxLineLabel(settings.gstRate, settings.pricesIncludeTax),
+    inclusive: settings.pricesIncludeTax,
   };
 }
 
@@ -140,12 +225,14 @@ export async function computeOrderTotals(
     0,
   );
 
-  const shipping = await resolveShipping(subtotalPaise, paymentMethod);
-  const taxPaise = 0;
+  const config = await loadCheckoutConfig();
+  const shipping = resolveShipping(config.shippingRules, subtotalPaise, paymentMethod);
+  const tax = resolveTax(config.tax, subtotalPaise);
   // Order.shippingCharge holds the combined figure; the two are only split
   // apart for display.
   const deliveryPaise = shipping.chargePaise + shipping.codFeePaise;
-  const totalPaise = subtotalPaise + deliveryPaise + taxPaise;
+  // addedPaise, not taxPaise: inclusive GST is already inside the subtotal.
+  const totalPaise = subtotalPaise + deliveryPaise + tax.addedPaise;
 
   const subtotal = paiseToDecimal(subtotalPaise);
   const shippingCharge = paiseToDecimal(deliveryPaise);
@@ -154,7 +241,7 @@ export async function computeOrderTotals(
   return {
     subtotal,
     shippingCharge,
-    taxAmount: paiseToDecimal(taxPaise),
+    taxAmount: paiseToDecimal(tax.taxPaise),
     total,
     subtotalFormatted: formatInr(subtotal),
     shippingFormatted:
@@ -166,6 +253,9 @@ export async function computeOrderTotals(
         ? formatInr(paiseToDecimal(shipping.codFeePaise))
         : null,
     totalFormatted: formatInr(total),
+    taxLabel: tax.label,
+    taxFormatted: tax.label ? formatInr(paiseToDecimal(tax.taxPaise)) : null,
+    taxIncluded: tax.inclusive,
     shippingRuleName: shipping.ruleName,
     freeShippingGap: shipping.nextTier
       ? {
@@ -208,10 +298,13 @@ export async function placeCodOrder(
     throw new AppError("ADDRESS_NOT_FOUND", "Choose a delivery address first.", 400);
   }
 
+  // Read the charging rules before opening the transaction, not inside it.
+  const config = await loadCheckoutConfig();
+
   // Retry only for an order-number collision, which the unique index catches.
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
-      return await createOrderTransaction(userId, addressId);
+      return await createOrderTransaction(userId, addressId, config);
     } catch (error) {
       const isDuplicateOrderNumber =
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -232,6 +325,7 @@ export async function placeCodOrder(
 async function createOrderTransaction(
   userId: string,
   addressId: string,
+  config: CheckoutConfig,
 ): Promise<PlacedOrder> {
   return db.$transaction(async (tx) => {
     const cart = await tx.cart.findUnique({
@@ -306,10 +400,17 @@ async function createOrderTransaction(
       }
     }
 
-    const shipping = await resolveShipping(subtotalPaise, PaymentMethod.COD);
-    const taxPaise = 0;
+    // Pure: no database round trip inside the transaction.
+    const shipping = resolveShipping(
+      config.shippingRules,
+      subtotalPaise,
+      PaymentMethod.COD,
+    );
+    const tax = resolveTax(config.tax, subtotalPaise);
     const deliveryPaise = shipping.chargePaise + shipping.codFeePaise;
-    const totalPaise = subtotalPaise + deliveryPaise + taxPaise;
+    // Must match computeOrderTotals exactly, or the customer is charged
+    // something other than the figure they agreed to.
+    const totalPaise = subtotalPaise + deliveryPaise + tax.addedPaise;
 
     const order = await tx.order.create({
       data: {
@@ -320,7 +421,7 @@ async function createOrderTransaction(
         paymentMethod: PaymentMethod.COD,
         subtotal: paiseToDecimal(subtotalPaise),
         shippingCharge: paiseToDecimal(deliveryPaise),
-        taxAmount: paiseToDecimal(taxPaise),
+        taxAmount: paiseToDecimal(tax.taxPaise),
         total: paiseToDecimal(totalPaise),
         items: { create: orderItems },
         // Audit trail starts here, written in the same transaction (spec 7).

@@ -22,6 +22,8 @@ export type AdminProductRow = {
   mrp: string;
   sellingPrice: string;
   costPrice: string | null;
+  /** ADMIN ONLY, like cost price — it lives in the same protected table. */
+  supplierName: string | null;
   /** Margin as a whole percentage of the selling price, null without a cost. */
   marginPercent: number | null;
   totalStock: number;
@@ -93,7 +95,7 @@ export async function listAdminProducts(
         createdAt: true,
         category: { select: { name: true } },
         // Admin opts IN to cost. Customer selects never include this.
-        cost: { select: { costPrice: true } },
+        cost: { select: { costPrice: true, supplierName: true } },
         images: { select: { url: true }, orderBy: { position: "asc" }, take: 1 },
         variants: { select: { stockQty: true } },
       },
@@ -114,6 +116,7 @@ export async function listAdminProducts(
       mrp: product.mrp.toString(),
       sellingPrice,
       costPrice,
+      supplierName: product.cost?.supplierName ?? null,
       marginPercent: costPrice ? marginPercent(sellingPrice, costPrice) : null,
       totalStock: product.variants.reduce((sum, v) => sum + v.stockQty, 0),
       variantCount: product.variants.length,
