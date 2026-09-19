@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/card";
 import { requireAdmin } from "@/lib/auth-guards";
 import { db } from "@/lib/db";
+import { formatInr } from "@/lib/format";
 import { LOW_STOCK_THRESHOLD } from "@/lib/queries/admin-products";
 
 export const metadata: Metadata = {
@@ -20,15 +21,24 @@ export const metadata: Metadata = {
 export default async function AdminDashboardPage() {
   const admin = await requireAdmin();
 
-  const [products, live, attributes, outOfStock, lowStock] = await Promise.all([
-    db.product.count(),
-    db.product.count({ where: { isActive: true } }),
-    db.attributeValue.count(),
-    db.productVariant.count({ where: { stockQty: 0 } }),
-    db.productVariant.count({
-      where: { stockQty: { gt: 0, lte: LOW_STOCK_THRESHOLD } },
-    }),
-  ]);
+  const [products, live, outOfStock, lowStock, newOrders, revenue] =
+    await Promise.all([
+      db.product.count(),
+      db.product.count({ where: { isActive: true } }),
+      db.productVariant.count({ where: { stockQty: 0 } }),
+      db.productVariant.count({
+        where: { stockQty: { gt: 0, lte: LOW_STOCK_THRESHOLD } },
+      }),
+      db.order.count({ where: { status: "PENDING" } }),
+      // Revenue excludes cancelled and returned orders — money that came back
+      // is not revenue.
+      db.order.aggregate({
+        _sum: { total: true },
+        where: { status: { notIn: ["CANCELLED", "RETURNED"] } },
+      }),
+    ]);
+
+  const revenueTotal = revenue._sum.total?.toString() ?? "0.00";
 
   return (
     <div className="space-y-8">
@@ -40,8 +50,13 @@ export default async function AdminDashboardPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Stat
+          label="New orders"
+          value={newOrders}
+          hint="Waiting to be confirmed"
+          tone={newOrders > 0 ? "warn" : "plain"}
+        />
         <Stat label="Products" value={products} hint={`${live} visible in the shop`} />
-        <Stat label="Filter options" value={attributes} hint="Across all attributes" />
         <Stat
           label="Out of stock"
           value={outOfStock}
@@ -76,16 +91,21 @@ export default async function AdminDashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Sales figures</CardTitle>
+            <CardTitle>Orders</CardTitle>
             <CardDescription>
-              Revenue, order counts, best sellers and profit reporting.
+              {formatInr(revenueTotal)} taken so far, excluding cancellations
+              and returns.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              These arrive once checkout and orders are built, since there is
-              nothing to report on until orders exist.
-            </p>
+          <CardContent className="flex gap-2">
+            <Button asChild>
+              <Link href="/admin/orders?status=PENDING">
+                {newOrders > 0 ? `Confirm ${newOrders} new` : "New orders"}
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/admin/orders">All orders</Link>
+            </Button>
           </CardContent>
         </Card>
       </div>
