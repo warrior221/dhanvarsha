@@ -45,6 +45,10 @@ const RULES = {
   otpVerify: { tokens: 10, window: "10 m" },
   setPassword: { tokens: 10, window: "60 m" },
   resetPassword: { tokens: 10, window: "60 m" },
+  /** Generous: a customer types, corrects and retypes a PIN code. */
+  pincode: { tokens: 40, window: "10 m" },
+  /** Tighter: each one can reach OpenStreetMap, whose policy forbids bulk use. */
+  geocode: { tokens: 10, window: "10 m" },
   checkout: { tokens: 20, window: "10 m" },
   codOrder: { tokens: 5, window: "60 m" },
 } as const satisfies Record<string, { tokens: number; window: `${number} ${"s" | "m" | "h"}` }>;

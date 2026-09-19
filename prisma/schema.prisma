@@ -406,3 +406,18 @@ model StoreSetting {
   legalName        String?
   updatedAt        DateTime @updatedAt
 }
+
+/// Cached India Post lookups, so a PIN code is fetched from the outside world
+/// once and served from our own database forever after.
+///
+/// This is a cache, not a source of truth: a row can be deleted safely and
+/// will simply be fetched again.
+model PincodeArea {
+  pincode   String   @id
+  city      String
+  /// Already normalised to one of INDIAN_STATES.
+  state     String
+  /// Post office / locality names, offered as suggestions for the area field.
+  areas     String[]
+  fetchedAt DateTime @default(now())
+}
