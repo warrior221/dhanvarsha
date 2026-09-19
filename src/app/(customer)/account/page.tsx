@@ -42,7 +42,7 @@ export default async function AccountPage() {
         <Tile
           href="/wishlist"
           icon={<Heart className="size-5" aria-hidden />}
-          label="Saved items"
+          label="Wishlist"
           value={savedCount}
         />
       </div>

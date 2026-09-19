@@ -23,7 +23,7 @@ export function WishlistContent() {
         className="grid grid-cols-2 gap-x-4 gap-y-8 lg:grid-cols-3 xl:grid-cols-4"
         aria-busy="true"
       >
-        <span className="sr-only">Loading saved items…</span>
+        <span className="sr-only">Loading your wishlist…</span>
         {Array.from({ length: 4 }, (_, i) => (
           <div key={i} className="space-y-3">
             <Skeleton className="aspect-[2/3] w-full rounded-lg" />
@@ -38,7 +38,7 @@ export function WishlistContent() {
   if (wishlist.products.length === 0) {
     return (
       <EmptyState
-        title="Nothing saved yet"
+        title="Your wishlist is empty"
         description="Tap the heart on any product to keep it here for later."
         action={
           <Button asChild>

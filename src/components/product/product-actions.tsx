@@ -24,6 +24,21 @@ function labelFor(variant: VariantOption): string {
 }
 
 /**
+ * True when the product is one-size, so there is no choice to make.
+ *
+ * Only then is a size picked automatically. A product with real sizes still
+ * requires a deliberate tap, because packing the wrong size is a return.
+ */
+function isOneSizeOnly(variants: VariantOption[]): boolean {
+  if (variants.length !== 1) return false;
+  const only = variants[0];
+  if (only.stockQty <= 0) return false;
+  return (
+    only.size === null || only.size.trim().toLowerCase().replace(/\s+/g, "") === "freesize"
+  );
+}
+
+/**
  * Size picker plus the buy actions.
  *
  * SIZE IS ALWAYS REQUIRED. Nothing is pre-selected and "Add to bag" stays
@@ -41,8 +56,11 @@ export function ProductActions({
   productId: string;
   variants: VariantOption[];
 }) {
-  // Deliberately empty: no default selection.
-  const [selectedId, setSelectedId] = useState("");
+  // Empty by default. The one exception is a one-size product, where there is
+  // nothing for the shopper to decide.
+  const [selectedId, setSelectedId] = useState(() =>
+    isOneSizeOnly(variants) ? variants[0].id : "",
+  );
   const [justAdded, setJustAdded] = useState(false);
   const [showSizeHint, setShowSizeHint] = useState(false);
 
@@ -58,6 +76,19 @@ export function ProductActions({
   const isSaving = useWishlistStore((state) => state.pending[productId] ?? false);
 
   const selected = variants.find((variant) => variant.id === selectedId) ?? null;
+
+  // A client-side move to another product can reuse this component, so the
+  // selection is re-derived whenever the options themselves change.
+  // Depend on the ids themselves, not the array identity, so an ordinary
+  // re-render cannot wipe a selection the shopper just made.
+  const variantKey = variants.map((variant) => variant.id).join(",");
+
+  useEffect(() => {
+    setSelectedId(isOneSizeOnly(variants) ? variants[0].id : "");
+    setShowSizeHint(false);
+    setJustAdded(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [variantKey]);
 
   useEffect(() => {
     if (!justAdded) return;
@@ -85,8 +116,14 @@ export function ProductActions({
     if (ok) setJustAdded(true);
   }
 
+  const oneSize = isOneSizeOnly(variants);
+
   return (
     <div className="space-y-4">
+      {oneSize ? (
+        // Nothing to choose, so nothing to ask for.
+        <p className="text-sm text-muted-foreground">One size</p>
+      ) : (
       <fieldset>
         <legend className="mb-2 text-sm font-medium">
           Size
@@ -138,6 +175,7 @@ export function ProductActions({
           })}
         </div>
       </fieldset>
+      )}
 
       {selected ? (
         <p className="text-sm" aria-live="polite">

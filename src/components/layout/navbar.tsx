@@ -41,7 +41,7 @@ export async function Navbar() {
           <Button asChild variant="ghost" size="sm" aria-label="Wishlist">
             <Link href="/wishlist">
               <Heart className="size-4" aria-hidden />
-              <span className="sr-only sm:not-sr-only">Saved</span>
+              <span className="sr-only sm:not-sr-only">Wishlist</span>
             </Link>
           </Button>
 
