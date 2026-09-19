@@ -44,6 +44,7 @@ const RULES = {
   otpSend: { tokens: 5, window: "60 m" },
   otpVerify: { tokens: 10, window: "10 m" },
   setPassword: { tokens: 10, window: "60 m" },
+  resetPassword: { tokens: 10, window: "60 m" },
   checkout: { tokens: 20, window: "10 m" },
   codOrder: { tokens: 5, window: "60 m" },
 } as const satisfies Record<string, { tokens: number; window: `${number} ${"s" | "m" | "h"}` }>;

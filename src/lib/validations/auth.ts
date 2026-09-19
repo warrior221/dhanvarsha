@@ -67,6 +67,27 @@ export const setPasswordSchema = z
     path: ["confirmPassword"],
   });
 
+/**
+ * Resetting a forgotten password.
+ *
+ * The code proves control of the mailbox, so it stands in for the old
+ * password — which by definition the person does not have.
+ */
+export const resetPasswordSchema = z
+  .object({
+    email: emailSchema,
+    code: z
+      .string()
+      .trim()
+      .regex(/^\d{6}$/, "Enter the 6-digit code from your email."),
+    password: passwordSchema,
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match.",
+    path: ["confirmPassword"],
+  });
+
 export const otpSendSchema = z.object({
   identifier: z.string().trim().min(1, "Missing identifier."),
   /**
