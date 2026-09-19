@@ -268,6 +268,25 @@ const products: ProductSeed[] = [
 async function main(): Promise<void> {
   console.log("Seeding database...\n");
 
+  // 0. Shipping rules --------------------------------------------------
+  // Editable in the database rather than hardcoded (spec 1.1). The rule that
+  // applies is the one with the highest minSubtotal the order reaches.
+  const shippingRules = [
+    { name: "Standard delivery", minSubtotal: "0.00", charge: "99.00", codExtraCharge: "50.00" },
+    { name: "Free delivery over Rs 2,000", minSubtotal: "2000.00", charge: "0.00", codExtraCharge: "50.00" },
+  ];
+
+  for (const rule of shippingRules) {
+    const existing = await db.shippingRule.findFirst({ where: { name: rule.name } });
+
+    if (existing) {
+      await db.shippingRule.update({ where: { id: existing.id }, data: rule });
+    } else {
+      await db.shippingRule.create({ data: rule });
+    }
+  }
+  console.log(`  shipping:   ${shippingRules.length} rules`);
+
   // 1. Categories -----------------------------------------------------
   for (const category of categories) {
     await db.category.upsert({

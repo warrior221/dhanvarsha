@@ -1,5 +1,6 @@
 import { OtpChannel, OtpPurpose } from "@prisma/client";
 import type { NextRequest } from "next/server";
+import { getOptionalUser } from "@/lib/auth-guards";
 import { db } from "@/lib/db";
 import { AppError, apiSuccess, handleApiError } from "@/lib/errors";
 import { sendOtp } from "@/lib/otp";
@@ -8,12 +9,20 @@ import { emailSchema, otpSendSchema } from "@/lib/validations/auth";
 
 const ROUTE = "POST /api/otp/send";
 
-/** Which transport each purpose uses. WhatsApp is not live yet. */
+/**
+ * Which transport each purpose uses.
+ *
+ * COD_CONFIRMATION goes by EMAIL rather than phone: SMS needs TRAI DLT
+ * registration and WhatsApp needs Meta Business verification, neither of which
+ * is in place. The intent of spec section 7 is still met — the order is
+ * confirmed through a channel the customer has already proven they control —
+ * and switching to WhatsApp later is one line here.
+ */
 const CHANNEL_FOR: Record<OtpPurpose, OtpChannel> = {
   EMAIL_VERIFICATION: OtpChannel.EMAIL,
   PASSWORD_RESET: OtpChannel.EMAIL,
+  COD_CONFIRMATION: OtpChannel.EMAIL,
   PHONE_VERIFICATION: OtpChannel.WHATSAPP,
-  COD_CONFIRMATION: OtpChannel.WHATSAPP,
 };
 
 /**
@@ -31,10 +40,7 @@ export async function POST(request: NextRequest) {
     const body: unknown = await request.json();
     const { identifier, purpose } = otpSendSchema.parse(body);
 
-    // Rate limited per IP *and* per identifier (spec section 7), so neither
-    // one attacker nor one targeted mailbox can be hammered.
     await enforceRateLimit("otpSend", ip);
-    await enforceRateLimit("otpSend", `id:${identifier}`);
 
     const channel = CHANNEL_FOR[purpose];
 
@@ -45,6 +51,35 @@ export async function POST(request: NextRequest) {
         501,
       );
     }
+
+    /* ---------------- confirming a cash-on-delivery order ---------------- */
+    if (purpose === OtpPurpose.COD_CONFIRMATION) {
+      // Always the signed-in user's own address. The identifier in the body is
+      // deliberately ignored, so this cannot be used to mail anyone else.
+      const user = await getOptionalUser();
+
+      if (!user?.email) {
+        throw new AppError("UNAUTHORIZED", "Please sign in to continue.", 401);
+      }
+
+      await enforceRateLimit("otpSend", `id:${user.email}`);
+
+      await sendOtp({
+        identifier: user.email,
+        channel: OtpChannel.EMAIL,
+        purpose: OtpPurpose.COD_CONFIRMATION,
+      });
+
+      return apiSuccess({
+        message: `We sent a confirmation code to ${user.email}.`,
+        sentTo: user.email,
+      });
+    }
+
+    /* ------------------------- verification codes ------------------------ */
+    // Rate limited per IP *and* per identifier (spec section 7), so neither
+    // one attacker nor one targeted mailbox can be hammered.
+    await enforceRateLimit("otpSend", `id:${identifier}`);
 
     const email = emailSchema.parse(identifier);
 

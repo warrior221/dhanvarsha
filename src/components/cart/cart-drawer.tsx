@@ -34,7 +34,9 @@ export function CartDrawer() {
           size="sm"
           className="relative"
           aria-label={
-            hydrated && count > 0 ? `Bag, ${count} items` : "Bag, empty"
+            hydrated && count > 0
+              ? `Bag, ${count} ${count === 1 ? "item" : "items"}`
+              : "Bag, empty"
           }
         >
           <ShoppingBag className="size-4" aria-hidden />

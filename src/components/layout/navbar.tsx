@@ -49,6 +49,9 @@ export async function Navbar() {
 
           {user ? (
             <>
+              <Button asChild variant="ghost" size="sm">
+                <Link href="/account">Account</Link>
+              </Button>
               {user.role === "ADMIN" ? (
                 <Button asChild variant="ghost" size="sm">
                   <Link href="/admin">Admin</Link>

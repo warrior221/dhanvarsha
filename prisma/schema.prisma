@@ -80,6 +80,11 @@ model Address {
   pincode   String
   phone     String
   isDefault Boolean @default(false)
+  /// Hidden from the address book but kept for order history. Order.addressId
+  /// is a live relation, not a snapshot, so a row used by an order must never
+  /// be edited in place or deleted - that would rewrite the delivery address
+  /// on invoices already sent.
+  isArchived Boolean @default(false)
   orders    Order[]
 
   @@index([userId])
@@ -363,4 +368,23 @@ model Session {
   createdAt    DateTime @default(now())
 
   @@index([userId])
+}
+
+/// Tiered delivery charges, configurable from the admin rather than hardcoded
+/// (spec 1.1: shipping rules live in the database, never in code).
+///
+/// The rule applied is the one with the HIGHEST minSubtotal that the order's
+/// subtotal reaches, so "free over 2000" simply beats "99 from 0".
+model ShippingRule {
+  id             String   @id @default(cuid())
+  name           String
+  /// Applies when the order subtotal is at or above this amount.
+  minSubtotal    Decimal  @db.Decimal(10, 2)
+  charge         Decimal  @db.Decimal(10, 2)
+  /// Added on top for cash on delivery, where a handling fee is common.
+  codExtraCharge Decimal  @default(0) @db.Decimal(10, 2)
+  isActive       Boolean  @default(true)
+  updatedAt      DateTime @updatedAt
+
+  @@index([isActive, minSubtotal])
 }
