@@ -8,7 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { requireAdmin } from "@/lib/auth-guards";
+import { requireAdminPage } from "@/lib/auth-guards";
 import { db } from "@/lib/db";
 import { formatInr } from "@/lib/format";
 import { LOW_STOCK_THRESHOLD } from "@/lib/queries/admin-products";
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
 };
 
 export default async function AdminDashboardPage() {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPage();
 
   const [products, live, outOfStock, lowStock, newOrders, revenue] =
     await Promise.all([

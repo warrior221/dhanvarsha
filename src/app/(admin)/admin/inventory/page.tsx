@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { requireAdmin } from "@/lib/auth-guards";
+import { requireAdminPage } from "@/lib/auth-guards";
 import { db } from "@/lib/db";
 import { LOW_STOCK_THRESHOLD } from "@/lib/queries/admin-products";
 
@@ -21,7 +21,7 @@ export const metadata: Metadata = {
 };
 
 export default async function AdminInventoryPage() {
-  await requireAdmin();
+  await requireAdminPage();
 
   const variants = await db.productVariant.findMany({
     orderBy: [{ stockQty: "asc" }, { sku: "asc" }],

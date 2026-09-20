@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { ShippingRulesEditor } from "@/components/admin/shipping-rules-editor";
 import { TaxSettingsForm } from "@/components/admin/tax-settings-form";
-import { requireAdmin } from "@/lib/auth-guards";
+import { requireAdminPage } from "@/lib/auth-guards";
 import { getTaxSettings, listShippingRules } from "@/lib/queries/settings";
 
 export const metadata: Metadata = {
@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 export default async function AdminSettingsPage() {
-  await requireAdmin();
+  await requireAdminPage();
 
   const [rules, tax] = await Promise.all([listShippingRules(), getTaxSettings()]);
 

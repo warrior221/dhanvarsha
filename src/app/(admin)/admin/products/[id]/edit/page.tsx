@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ProductForm } from "@/components/admin/product-form";
-import { requireAdmin } from "@/lib/auth-guards";
+import { requireAdminPage } from "@/lib/auth-guards";
 import { db } from "@/lib/db";
 import { getAdminProduct } from "@/lib/queries/admin-products";
 
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 export default async function EditProductPage(
   props: PageProps<"/admin/products/[id]/edit">,
 ) {
-  await requireAdmin();
+  await requireAdminPage();
 
   // params is a Promise in Next.js 16.
   const { id } = await props.params;

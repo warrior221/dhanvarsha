@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { OrderStatusControl } from "@/components/admin/order-status-control";
 import { orderStatusLabel } from "@/components/shared/order-status-badge";
 import { Separator } from "@/components/ui/separator";
-import { requireAdmin } from "@/lib/auth-guards";
+import { requireAdminPage } from "@/lib/auth-guards";
 import { getAdminOrder } from "@/lib/queries/admin-orders";
 
 export const metadata: Metadata = {
@@ -24,7 +24,7 @@ const DATE_TIME = new Intl.DateTimeFormat("en-IN", {
 export default async function AdminOrderDetailPage(
   props: PageProps<"/admin/orders/[orderNumber]">,
 ) {
-  await requireAdmin();
+  await requireAdminPage();
 
   const { orderNumber } = await props.params;
   const order = await getAdminOrder(orderNumber);

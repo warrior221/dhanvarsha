@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ProductForm } from "@/components/admin/product-form";
-import { requireAdmin } from "@/lib/auth-guards";
+import { requireAdminPage } from "@/lib/auth-guards";
 import { db } from "@/lib/db";
 
 export const metadata: Metadata = {
@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 export default async function NewProductPage() {
-  await requireAdmin();
+  await requireAdminPage();
 
   const [categories, attributes] = await Promise.all([
     db.category.findMany({

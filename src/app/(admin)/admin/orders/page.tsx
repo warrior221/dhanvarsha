@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { requireAdmin } from "@/lib/auth-guards";
+import { requireAdminPage } from "@/lib/auth-guards";
 import { listAdminOrders } from "@/lib/queries/admin-orders";
 import { cn } from "@/lib/utils";
 
@@ -38,7 +38,7 @@ const STATUS_TABS = [
 ] as const;
 
 export default async function AdminOrdersPage(props: PageProps<"/admin/orders">) {
-  await requireAdmin();
+  await requireAdminPage();
 
   const searchParams = await props.searchParams;
   const first = (key: string): string | null => {

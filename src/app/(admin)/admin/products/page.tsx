@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { requireAdmin } from "@/lib/auth-guards";
+import { requireAdminPage } from "@/lib/auth-guards";
 import { db } from "@/lib/db";
 import { formatInr } from "@/lib/format";
 import { LOW_STOCK_THRESHOLD, listAdminProducts } from "@/lib/queries/admin-products";
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
 export default async function AdminProductsPage(props: PageProps<"/admin/products">) {
   // Guards again even though the layout did: a page that assumes its layout
   // ran is a page that breaks the day the layout moves.
-  await requireAdmin();
+  await requireAdminPage();
 
   const searchParams = await props.searchParams;
   const first = (key: string): string | null => {

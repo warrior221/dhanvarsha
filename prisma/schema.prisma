@@ -43,6 +43,9 @@ enum OtpPurpose {
   PHONE_VERIFICATION
   COD_CONFIRMATION
   PASSWORD_RESET
+  /// A step in the admin sign-in ladder. Keyed to one session, not to a
+  /// person, so a code issued for one browser cannot be used in another.
+  ADMIN_MFA
 }
 
 model User {
@@ -62,6 +65,7 @@ model User {
   reviews         Review[]
   statusChanges   OrderStatusHistory[]
   sessions        Session[]
+  adminMfa        AdminMfa?
   setupTokens     SetupToken[]
   createdAt       DateTime             @default(now())
 
@@ -367,6 +371,12 @@ model Session {
   expiresAt    DateTime
   createdAt    DateTime @default(now())
 
+  /// When the admin second-factor ladder was last completed on THIS session.
+  /// Null means an admin signed in with a password but has not yet passed the
+  /// extra checks, so /admin stays closed to them.
+  mfaVerifiedAt DateTime?
+  mfaChallenge  AdminMfaChallenge?
+
   @@index([userId])
 }
 
@@ -420,4 +430,54 @@ model PincodeArea {
   /// Post office / locality names, offered as suggestions for the area field.
   areas     String[]
   fetchedAt DateTime @default(now())
+}
+
+
+/// Admin second-factor enrolment. One row per admin who has set it up.
+///
+/// Customers never have one: a customer account cannot see cost prices, and
+/// forcing three checks on a shopper would cost far more in lost sales than
+/// it protects.
+model AdminMfa {
+  id       String @id @default(cuid())
+  userId   String @unique
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Base32 TOTP secret for the authenticator app.
+  totpSecret     String?
+  /// Set once the admin has proved the app is working by entering a code.
+  totpConfirmedAt DateTime?
+
+  /// 10-digit Indian mobile for the WhatsApp step.
+  whatsappPhone      String?
+  whatsappVerifiedAt DateTime?
+
+  recoveryCodes AdminRecoveryCode[]
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+}
+
+/// Single-use codes that stand in for the whole ladder when a phone is lost.
+/// Stored bcrypt-hashed, exactly like a password.
+model AdminRecoveryCode {
+  id       String    @id @default(cuid())
+  mfaId    String
+  mfa      AdminMfa  @relation(fields: [mfaId], references: [id], onDelete: Cascade)
+  codeHash String
+  usedAt   DateTime?
+
+  @@index([mfaId, usedAt])
+}
+
+/// Progress through the three steps, for one session, while it is happening.
+/// Deleted once the ladder is complete or when it expires.
+model AdminMfaChallenge {
+  id           String   @id @default(cuid())
+  sessionId    String   @unique
+  session      Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  emailAt      DateTime?
+  whatsappAt   DateTime?
+  totpAt       DateTime?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
 }

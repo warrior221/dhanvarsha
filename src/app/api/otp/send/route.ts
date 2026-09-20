@@ -22,6 +22,10 @@ const CHANNEL_FOR: Record<OtpPurpose, OtpChannel> = {
   PASSWORD_RESET: OtpChannel.EMAIL,
   COD_CONFIRMATION: OtpChannel.EMAIL,
   PHONE_VERIFICATION: OtpChannel.WHATSAPP,
+  // Present only to satisfy the exhaustive Record. ADMIN_MFA is not in
+  // otpSendSchema, so this route can never be asked to send one — the admin
+  // ladder issues its own codes in queries/admin-mfa.ts.
+  ADMIN_MFA: OtpChannel.EMAIL,
 };
 
 /**

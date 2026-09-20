@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { AttributeManager } from "@/components/admin/attribute-manager";
-import { requireAdmin } from "@/lib/auth-guards";
+import { requireAdminPage } from "@/lib/auth-guards";
 import { listAdminAttributes } from "@/lib/queries/admin-attributes";
 
 export const metadata: Metadata = {
@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 };
 
 export default async function AdminAttributesPage() {
-  await requireAdmin();
+  await requireAdminPage();
 
   const attributes = await listAdminAttributes();
 

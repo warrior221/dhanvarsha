@@ -99,7 +99,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const sessionToken = newSessionToken();
         const headers = request.headers;
 
-        await db.session.create({
+        const row = await db.session.create({
           data: {
             userId: user.id,
             sessionToken,
@@ -115,6 +115,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           email: user.email,
           role: user.role,
           sessionToken,
+          sessionId: row.id,
         };
       },
     }),
@@ -127,6 +128,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.id = user.id as string;
         token.role = user.role;
         token.sessionToken = user.sessionToken;
+        token.sessionId = user.sessionId;
         return token;
       }
 
@@ -135,7 +137,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
       const session = await db.session.findUnique({
         where: { sessionToken: token.sessionToken },
-        select: { expiresAt: true, user: { select: { role: true } } },
+        select: { id: true, expiresAt: true, user: { select: { role: true } } },
       });
 
       // Revoked ("log out everywhere") or expired.
@@ -143,6 +145,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
       // Pick up role changes without forcing a re-login.
       token.role = session.user.role;
+      token.sessionId = session.id;
 
       return token;
     },
@@ -150,6 +153,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     session({ session, token }) {
       session.user.id = token.id;
       session.user.role = token.role;
+      // The session ROW ID, never the session token.
+      //
+      // /api/auth/session serves this object to anyone holding the cookie, so
+      // the token itself must never be on it — that is the credential. The row
+      // id is only a database key: no route accepts one from the browser, and
+      // knowing it authenticates nobody. The admin MFA gate needs it to record
+      // which session passed the checks.
+      session.sessionId = token.sessionId;
       return session;
     },
   },
@@ -192,9 +203,13 @@ declare module "next-auth" {
     role: Role;
     /** Set by authorize(), read once by the jwt callback. */
     sessionToken?: string;
+    /** Session ROW id, not the token. See the session callback. */
+    sessionId?: string;
   }
 
   interface Session {
+    /** Session row id. Safe to expose; the token is not. */
+    sessionId?: string;
     user: {
       id: string;
       role: Role;
@@ -216,5 +231,6 @@ declare module "@auth/core/jwt" {
     id: string;
     role: Role;
     sessionToken?: string;
+    sessionId?: string;
   }
 }

@@ -1,4 +1,5 @@
 import { randomInt } from "node:crypto";
+import type { ReactElement } from "react";
 import { OtpChannel, OtpPurpose } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
@@ -93,23 +94,12 @@ type DeliverInput = SendOtpInput & { code: string };
 async function deliver({ identifier, channel, purpose, code }: DeliverInput): Promise<void> {
   switch (channel) {
     case OtpChannel.EMAIL:
-      try {
-        await sendEmail({
-          to: identifier,
-          subject: `${code} is your Dhanvarsha verification code`,
-          react: OtpCodeEmail({ code, expiryMinutes: OTP_EXPIRY_MINUTES, purpose }),
-        });
-      } catch (error) {
-        // In PRODUCTION a failed send is a failed send: the customer is told
-        // so, and nothing is written to a log where a code could be read.
-        if (process.env.NODE_ENV === "production") throw error;
-
-        // In development the shop cannot be tested at all while Resend's free
-        // tier refuses every address except the account owner's. Printing the
-        // code to the developer's own terminal unblocks that, and this branch
-        // is unreachable once a domain is verified — or in production at all.
-        printDevelopmentFallback(identifier, code, error);
-      }
+      await sendCodeEmail({
+        to: identifier,
+        subject: `${code} is your Dhanvarsha verification code`,
+        code,
+        react: OtpCodeEmail({ code, expiryMinutes: OTP_EXPIRY_MINUTES, purpose }),
+      });
       return;
 
     case OtpChannel.WHATSAPP:
@@ -118,6 +108,36 @@ async function deliver({ identifier, channel, purpose, code }: DeliverInput): Pr
         "WhatsApp delivery is not available yet.",
         501,
       );
+  }
+}
+
+/**
+ * Sends a message that CONTAINS A CODE, with the development fallback.
+ *
+ * Every code-bearing email must go through here, not straight to sendEmail.
+ * Resend's free tier refuses every recipient except the account owner, so a
+ * direct call locks that flow out of testing entirely — which is exactly how
+ * the admin sign-in ladder was briefly unusable.
+ *
+ * In production a failed send is still a failed send and throws.
+ */
+export async function sendCodeEmail({
+  to,
+  subject,
+  code,
+  react,
+}: {
+  to: string;
+  subject: string;
+  code: string;
+  react: ReactElement;
+}): Promise<void> {
+  try {
+    await sendEmail({ to, subject, react });
+  } catch (error) {
+    if (process.env.NODE_ENV === "production") throw error;
+
+    printDevelopmentFallback(to, code, error);
   }
 }
 

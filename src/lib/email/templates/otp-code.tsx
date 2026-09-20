@@ -1,3 +1,4 @@
+import type { OtpPurpose } from "@prisma/client";
 import {
   Body,
   Container,
@@ -14,14 +15,15 @@ export type OtpCodeEmailProps = {
   code: string;
   /** How long the code stays valid, in minutes. */
   expiryMinutes: number;
-  purpose: "EMAIL_VERIFICATION" | "PHONE_VERIFICATION" | "COD_CONFIRMATION" | "PASSWORD_RESET";
+  purpose: OtpPurpose;
 };
 
-const HEADLINE: Record<OtpCodeEmailProps["purpose"], string> = {
+const HEADLINE: Record<OtpPurpose, string> = {
   EMAIL_VERIFICATION: "Confirm your email address",
   PHONE_VERIFICATION: "Confirm your phone number",
   COD_CONFIRMATION: "Confirm your cash-on-delivery order",
   PASSWORD_RESET: "Reset your password",
+  ADMIN_MFA: "Your admin sign-in code",
 };
 
 export function OtpCodeEmail({ code, expiryMinutes, purpose }: OtpCodeEmailProps) {
