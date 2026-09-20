@@ -1,6 +1,6 @@
 "use client";
 
-import { OrderStatus } from "@prisma/client";
+import type { OrderStatus } from "@prisma/client";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { ApiError, requestJson } from "@/lib/api-client";
 import {
   ALLOWED_TRANSITIONS,
+  ORDER_STATUS,
   TRANSITION_LABEL,
   isTerminal,
   requiresTracking,
@@ -118,7 +119,7 @@ export function OrderStatusControl({
             </p>
           ) : null}
 
-          {pendingTo === OrderStatus.RETURNED ? (
+          {pendingTo === ORDER_STATUS.RETURNED ? (
             <p className="rounded-md bg-muted p-3 text-sm">
               A return does <strong>not</strong> add stock back automatically —
               returned pieces may not be resellable. Adjust stock yourself on the
@@ -170,9 +171,9 @@ export function OrderStatusControl({
             <Button
               key={to}
               type="button"
-              variant={to === OrderStatus.CANCELLED ? "outline" : "default"}
+              variant={to === ORDER_STATUS.CANCELLED ? "outline" : "default"}
               className={
-                to === OrderStatus.CANCELLED
+                to === ORDER_STATUS.CANCELLED
                   ? "text-destructive hover:text-destructive"
                   : undefined
               }

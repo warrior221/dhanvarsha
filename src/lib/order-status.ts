@@ -1,4 +1,26 @@
-import { OrderStatus } from "@prisma/client";
+import type { OrderStatus } from "@prisma/client";
+
+/**
+ * Order lifecycle rules.
+ *
+ * PURE MODULE — nothing here reaches the database or the Prisma runtime, so
+ * the admin UI can grey out impossible buttons using exactly the rules the
+ * server enforces.
+ *
+ * The status values are declared HERE as plain strings rather than imported
+ * from @prisma/client. A Prisma enum is a runtime value, so importing one
+ * into a browser component drags Prisma's browser library in with it — 53 KB
+ * of library to spell six words. `import type` above costs nothing: it is
+ * erased when the code is built.
+ */
+export const ORDER_STATUS = {
+  PENDING: "PENDING",
+  CONFIRMED: "CONFIRMED",
+  SHIPPED: "SHIPPED",
+  DELIVERED: "DELIVERED",
+  CANCELLED: "CANCELLED",
+  RETURNED: "RETURNED",
+} as const satisfies Record<OrderStatus, OrderStatus>;
 
 /**
  * Which status an order may move to next (spec section 7).
@@ -9,15 +31,12 @@ import { OrderStatus } from "@prisma/client";
  *   DELIVERED -> RETURNED
  *   CANCELLED -> (terminal)
  *   RETURNED  -> (terminal)
- *
- * Pure module with no database import, so the admin UI can grey out the
- * impossible buttons using exactly the rules the server enforces.
  */
 export const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  PENDING: [OrderStatus.CONFIRMED, OrderStatus.CANCELLED],
-  CONFIRMED: [OrderStatus.SHIPPED, OrderStatus.CANCELLED],
-  SHIPPED: [OrderStatus.DELIVERED, OrderStatus.RETURNED],
-  DELIVERED: [OrderStatus.RETURNED],
+  PENDING: [ORDER_STATUS.CONFIRMED, ORDER_STATUS.CANCELLED],
+  CONFIRMED: [ORDER_STATUS.SHIPPED, ORDER_STATUS.CANCELLED],
+  SHIPPED: [ORDER_STATUS.DELIVERED, ORDER_STATUS.RETURNED],
+  DELIVERED: [ORDER_STATUS.RETURNED],
   CANCELLED: [],
   RETURNED: [],
 };
@@ -33,7 +52,7 @@ export function isTerminal(status: OrderStatus): boolean {
 
 /** Marking an order shipped is meaningless without these. */
 export function requiresTracking(to: OrderStatus): boolean {
-  return to === OrderStatus.SHIPPED;
+  return to === ORDER_STATUS.SHIPPED;
 }
 
 /**
@@ -44,7 +63,7 @@ export function requiresTracking(to: OrderStatus): boolean {
  * stock from the inventory screen rather than the system assuming.
  */
 export function restoresStock(to: OrderStatus): boolean {
-  return to === OrderStatus.CANCELLED;
+  return to === ORDER_STATUS.CANCELLED;
 }
 
 /** Verbs for the admin buttons. */
