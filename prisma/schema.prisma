@@ -67,6 +67,7 @@ model User {
   orders          Order[]
   wishlist        Wishlist[]
   reviews         Review[]
+  shopReviews     ShopReview[]
   statusChanges   OrderStatusHistory[]
   sessions        Session[]
   adminMfa        AdminMfa?
@@ -484,4 +485,42 @@ model AdminMfaChallenge {
   totpAt       DateTime?
   expiresAt    DateTime
   createdAt    DateTime @default(now())
+}
+
+enum ShopReviewSource {
+  /// Written on this website.
+  WEBSITE
+  /// Pulled from the shop's Google Business listing.
+  GOOGLE
+}
+
+/// A review of the SHOP, not of one product.
+///
+/// Shown as a moving strip on the home page. Website reviews stay hidden
+/// until an admin approves them: the home page is the first thing a stranger
+/// sees, and an open text box wired straight to it is an invitation.
+model ShopReview {
+  id          String           @id @default(cuid())
+  source      ShopReviewSource @default(WEBSITE)
+  authorName  String
+  /// 1 to 5. Checked in code as well as here.
+  rating      Int
+  body        String
+  isPublished Boolean          @default(false)
+  /// Google's own id for the review, so re-importing updates rather than
+  /// duplicates. Null for reviews written here.
+  externalId  String?          @unique
+  /// Google supplies a profile photo and a link; both must be shown when
+  /// their reviews are displayed.
+  authorPhotoUrl String?
+  authorUrl      String?
+  /// When the customer wrote it, which is not when we imported it.
+  reviewedAt  DateTime
+  /// Set when a signed-in customer wrote it, so the shop can see who.
+  userId      String?
+  user        User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([isPublished, reviewedAt])
 }

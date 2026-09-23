@@ -54,6 +54,8 @@ const RULES = {
   mfaChallenge: { tokens: 40, window: "15 m" },
   /** A recovery code clears all three steps, so guessing must be expensive. */
   mfaRecovery: { tokens: 5, window: "60 m" },
+  /** Keeps the moderation queue from being flooded from one address. */
+  shopReview: { tokens: 3, window: "60 m" },
   checkout: { tokens: 20, window: "10 m" },
   codOrder: { tokens: 5, window: "60 m" },
 } as const satisfies Record<string, { tokens: number; window: `${number} ${"s" | "m" | "h"}` }>;

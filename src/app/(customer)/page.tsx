@@ -1,13 +1,15 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ProductCard } from "@/components/product/product-card";
+import { ReviewMarquee } from "@/components/shop/review-marquee";
 import { EmptyState } from "@/components/shared/states";
 import { Button } from "@/components/ui/button";
 import { db } from "@/lib/db";
 import { productCardSelect, toProductCardView } from "@/lib/queries/product";
+import { getPublishedShopReviews } from "@/lib/queries/shop-reviews";
 
 export default async function HomePage() {
-  const [categories, featuredRows] = await Promise.all([
+  const [categories, featuredRows, shopReviews] = await Promise.all([
     db.category.findMany({
       orderBy: { position: "asc" },
       select: {
@@ -28,6 +30,7 @@ export default async function HomePage() {
       take: 8,
       select: productCardSelect,
     }),
+    getPublishedShopReviews(),
   ]);
 
   const featured = featuredRows.map(toProductCardView);
@@ -101,6 +104,38 @@ export default async function HomePage() {
           </div>
         )}
       </section>
+
+      {shopReviews.reviews.length > 0 ? (
+        <section className="border-t bg-muted/30 py-12">
+          <div className="mx-auto max-w-6xl px-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="text-xl font-semibold">What our customers say</h2>
+              {shopReviews.average !== null ? (
+                <p className="text-sm text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    {shopReviews.average.toFixed(1)}
+                  </span>{" "}
+                  out of 5 from {shopReviews.count}{" "}
+                  {shopReviews.count === 1 ? "review" : "reviews"}
+                </p>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <ReviewMarquee reviews={shopReviews.reviews} />
+          </div>
+
+          <div className="mx-auto mt-6 max-w-6xl px-4">
+            <Link
+              href="/reviews"
+              className="text-sm underline underline-offset-4"
+            >
+              Read all reviews, or leave your own
+            </Link>
+          </div>
+        </section>
+      ) : null}
     </main>
   );
 }

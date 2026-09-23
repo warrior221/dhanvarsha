@@ -128,3 +128,20 @@
     @apply font-sans;
   }
 }
+/*
+ * The home-page review strip.
+ *
+ * The list is rendered twice and shifted by exactly half its width, so the
+ * second copy lands where the first began and the loop has no seam.
+ *
+ * Applied through `motion-safe:` in the component, so a visitor who has asked
+ * their device for reduced motion gets a strip they scroll themselves.
+ */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
