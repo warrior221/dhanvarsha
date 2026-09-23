@@ -104,6 +104,30 @@ export function parseCatalogParams(
   };
 }
 
+/** Maximum words honoured in one search. */
+const MAX_SEARCH_TERMS = 6;
+
+/**
+ * Splits what the shopper typed into words worth matching.
+ *
+ * Capped, because each word becomes another AND clause in the query and a
+ * pasted paragraph should not turn into a thirty-way join. Single characters
+ * are dropped: they match almost everything and narrow nothing.
+ */
+export function searchTerms(q: string | null): string[] {
+  if (!q) return [];
+
+  return [
+    ...new Set(
+      q
+        .toLowerCase()
+        .split(/[\s,]+/)
+        .map((word) => word.trim())
+        .filter((word) => word.length > 1),
+    ),
+  ].slice(0, MAX_SEARCH_TERMS);
+}
+
 export function buildProductWhere(params: CatalogParams): Prisma.ProductWhereInput {
   const and: Prisma.ProductWhereInput[] = [{ isActive: true }];
 
@@ -111,11 +135,26 @@ export function buildProductWhere(params: CatalogParams): Prisma.ProductWhereInp
     and.push({ category: { slug: params.categorySlug } });
   }
 
-  if (params.q) {
+  // EVERY word must match SOMETHING, but each may match a different field.
+  //
+  // A single `contains` on the whole phrase meant "blue banarasi" found
+  // nothing while "banarasi" found the saree, because the words do not sit
+  // next to each other in the name. Shoppers type what they remember, in
+  // whatever order it comes out.
+  for (const term of searchTerms(params.q)) {
     and.push({
       OR: [
-        { name: { contains: params.q, mode: "insensitive" } },
-        { description: { contains: params.q, mode: "insensitive" } },
+        { name: { contains: term, mode: "insensitive" } },
+        { description: { contains: term, mode: "insensitive" } },
+        { sku: { contains: term, mode: "insensitive" } },
+        { category: { name: { contains: term, mode: "insensitive" } } },
+        // Fabric, occasion, style — so "wedding" or "georgette" works even
+        // when the word appears nowhere in the name.
+        {
+          attributes: {
+            some: { value: { value: { contains: term, mode: "insensitive" } } },
+          },
+        },
       ],
     });
   }

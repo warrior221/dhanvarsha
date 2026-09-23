@@ -1,6 +1,8 @@
 import { Heart } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 import { CartDrawer } from "@/components/cart/cart-drawer";
+import { SearchBox } from "@/components/layout/search-box";
 import { Button } from "@/components/ui/button";
 import { logoutAction } from "@/lib/auth-actions";
 import { getOptionalUser } from "@/lib/auth-guards";
@@ -37,6 +39,11 @@ export async function Navbar() {
           ))}
         </nav>
 
+        {/* useSearchParams needs a Suspense boundary in Next 16. */}
+        <Suspense fallback={null}>
+          <SearchBox className="hidden w-full max-w-xs lg:block" />
+        </Suspense>
+
         <div className="flex items-center gap-2">
           <Button asChild variant="ghost" size="sm" aria-label="Wishlist">
             <Link href="/wishlist">
@@ -69,6 +76,12 @@ export async function Navbar() {
             </Button>
           )}
         </div>
+      </div>
+
+      <div className="border-t px-4 py-2 lg:hidden">
+        <Suspense fallback={null}>
+          <SearchBox />
+        </Suspense>
       </div>
 
       <nav
