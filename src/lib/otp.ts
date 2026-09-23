@@ -37,13 +37,27 @@ export type SendOtpInput = {
   identifier: string;
   channel: OtpChannel;
   purpose: OtpPurpose;
+  /**
+   * Overrides how the code is delivered.
+   *
+   * Lets a caller use a channel this module has no opinion about — phone
+   * verification sends over WhatsApp — while keeping the cooldown, hashing,
+   * expiry and attempt limits here, in one place, where they are enforced
+   * identically for every code the shop issues.
+   */
+  deliver?: (code: string) => Promise<void>;
 };
 
 /**
  * Issues a code and delivers it. Any previously issued, still-live code for
  * the same identifier+purpose is burned first, so only the newest works.
  */
-export async function sendOtp({ identifier, channel, purpose }: SendOtpInput): Promise<void> {
+export async function sendOtp({
+  identifier,
+  channel,
+  purpose,
+  deliver: customDeliver,
+}: SendOtpInput): Promise<void> {
   const now = new Date();
 
   // 60 second resend cooldown.
@@ -80,6 +94,11 @@ export async function sendOtp({ identifier, channel, purpose }: SendOtpInput): P
       data: { identifier, channel, purpose, codeHash, expiresAt },
     }),
   ]);
+
+  if (customDeliver) {
+    await customDeliver(code);
+    return;
+  }
 
   await deliver({ identifier, channel, purpose, code });
 }

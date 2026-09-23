@@ -54,8 +54,12 @@ model User {
   email           String               @unique
   passwordHash    String?
   role            Role                 @default(CUSTOMER)
-  phone           String?
+  /// Unique so it can be a sign-in identifier in its own right. Null is
+  /// allowed many times over; Postgres does not treat nulls as equal.
+  phone           String?              @unique
   emailVerified   DateTime?
+  /// A delivery cannot be arranged against a number nobody answers, so an
+  /// order requires this to be set (spec 1.6 / section 7).
   phoneVerified   DateTime?
   twoFactorSecret String?
   addresses       Address[]

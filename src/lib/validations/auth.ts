@@ -52,8 +52,40 @@ export const registerSchema = z.object({
   password: passwordSchema,
 });
 
+/**
+ * Sign in with EITHER an email address or a mobile number.
+ *
+ * Kept as one free-text field rather than a toggle: people type whichever
+ * they remember, and asking them to first declare which kind it is adds a
+ * decision for no benefit. Which one it is falls out of the shape.
+ */
+export const loginIdentifierSchema = z
+  .string()
+  .trim()
+  .min(1, "Enter your email address or mobile number.")
+  .max(254);
+
+export type LoginIdentifier =
+  | { kind: "email"; email: string }
+  | { kind: "phone"; phone: string };
+
+/** Decides what the customer typed. Returns null when it is neither. */
+export function classifyIdentifier(raw: string): LoginIdentifier | null {
+  const value = raw.trim();
+
+  // Anything with an @ can only have been meant as an email.
+  if (value.includes("@")) {
+    const email = emailSchema.safeParse(value);
+    return email.success ? { kind: "email", email: email.data } : null;
+  }
+
+  const phone = phoneSchema.safeParse(value);
+  return phone.success ? { kind: "phone", phone: phone.data } : null;
+}
+
 export const loginSchema = z.object({
-  email: emailSchema,
+  /** An email address or a 10-digit Indian mobile number. */
+  email: loginIdentifierSchema,
   password: z.string().min(1, "Please enter your password."),
 });
 

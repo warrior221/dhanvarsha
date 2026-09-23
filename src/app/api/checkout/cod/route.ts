@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { requireUser } from "@/lib/auth-guards";
 import { apiSuccess, handleApiError } from "@/lib/errors";
 import { placeCodOrder } from "@/lib/queries/checkout";
+import { assertCanOrder } from "@/lib/queries/customer-phone";
 import { clientIpFrom, enforceRateLimit } from "@/lib/rate-limit";
 import { codOrderSchema } from "@/lib/validations/checkout";
 
@@ -26,6 +27,12 @@ export async function POST(request: NextRequest) {
 
     await enforceRateLimit("codOrder", ip);
     await enforceRateLimit("codOrder", `user:${user.id}`);
+
+    // A verified mobile number is required to place an order — the courier
+    // phones ahead, and an unreachable number is a failed delivery. Enforced
+    // HERE as well as in the UI, so posting straight to this route cannot
+    // skip it.
+    await assertCanOrder(user.id);
 
     const body: unknown = await request.json();
     const { addressId } = codOrderSchema.parse(body);

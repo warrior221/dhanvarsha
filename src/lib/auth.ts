@@ -5,7 +5,7 @@ import NextAuth from "next-auth";
 import { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { db } from "@/lib/db";
-import { loginSchema } from "@/lib/validations/auth";
+import { classifyIdentifier, loginSchema } from "@/lib/validations/auth";
 
 /**
  * SPEC CONFLICT, AND HOW IT IS RESOLVED
@@ -58,7 +58,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
     Credentials({
       credentials: {
-        email: { label: "Email", type: "email" },
+        email: { label: "Email or mobile number", type: "text" },
         password: { label: "Password", type: "password" },
       },
 
@@ -68,10 +68,20 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         // Malformed input is just a failed sign-in, not a 422.
         if (!parsed.success) return null;
 
-        const { email, password } = parsed.data;
+        const { email: identifier, password } = parsed.data;
+
+        // Either an email address or a mobile number; both are unique.
+        const who = classifyIdentifier(identifier);
+
+        if (!who) {
+          // Still burn a bcrypt compare, so "not a valid identifier" and
+          // "wrong password" take a similar amount of time.
+          await bcrypt.compare(password, DUMMY_HASH);
+          return null;
+        }
 
         const user = await db.user.findUnique({
-          where: { email },
+          where: who.kind === "email" ? { email: who.email } : { phone: who.phone },
           select: {
             id: true,
             name: true,
@@ -79,6 +89,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             role: true,
             passwordHash: true,
             emailVerified: true,
+            phoneVerified: true,
           },
         });
 
@@ -93,7 +104,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const ok = await bcrypt.compare(password, user.passwordHash);
         if (!ok) return null;
 
-        if (!user.emailVerified) throw new EmailNotVerifiedError();
+        // Signing in by mobile means the number was already verified to get
+        // there, so an unverified EMAIL only blocks the email route.
+        if (who.kind === "email" && !user.emailVerified) {
+          throw new EmailNotVerifiedError();
+        }
 
         // Record the session so it can be listed and revoked.
         const sessionToken = newSessionToken();

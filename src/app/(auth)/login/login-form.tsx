@@ -37,15 +37,17 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
       ) : null}
 
       <div className="space-y-2">
-        <Label htmlFor="email">Email</Label>
+        <Label htmlFor="email">Email or mobile number</Label>
         <Input
           id="email"
           name="email"
-          type="email"
-          autoComplete="email"
+          // Deliberately type="text", not "email": a mobile number is just as
+          // valid here, and the browser would refuse to submit one.
+          type="text"
+          autoComplete="username"
           required
           disabled={isPending}
-          placeholder="you@example.com"
+          placeholder="you@example.com or 9876543210"
         />
       </div>
 

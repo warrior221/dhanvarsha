@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { AddressForm } from "@/components/checkout/address-form";
+import { PhoneStep } from "@/components/checkout/phone-step";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -13,6 +14,7 @@ import type { CartView } from "@/lib/cart";
 import { formatInr } from "@/lib/format";
 import type { AddressView } from "@/lib/queries/address";
 import type { OrderTotals } from "@/lib/queries/checkout";
+import type { PhoneStatus } from "@/lib/queries/customer-phone";
 import { cn } from "@/lib/utils";
 import { useCartStore } from "@/store/cart-store";
 
@@ -34,10 +36,12 @@ export function CheckoutClient({
   addresses,
   cart,
   totals,
+  phone,
 }: {
   addresses: AddressView[];
   cart: CartView;
   totals: OrderTotals;
+  phone: PhoneStatus;
 }) {
   const router = useRouter();
   const refreshCart = useCartStore((state) => state.refresh);
@@ -50,6 +54,12 @@ export function CheckoutClient({
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // A confirmed mobile number is required before an order can be placed. The
+  // server enforces this too — this only keeps the button honest.
+  const [phoneVerified, setPhoneVerified] = useState(phone.verified);
+
+  const selectedAddress = list.find((address) => address.id === selectedId) ?? null;
 
   async function placeOrder() {
     if (!selectedId) {
@@ -168,6 +178,15 @@ export function CheckoutClient({
           )}
         </section>
 
+        {/* ------------------------- mobile -------------------------- */}
+        {!phoneVerified ? (
+          <PhoneStep
+            initial={phone}
+            suggested={selectedAddress?.phone ?? null}
+            onVerified={() => setPhoneVerified(true)}
+          />
+        ) : null}
+
         {/* ----------------------- place order ----------------------- */}
         <section className="space-y-4 rounded-lg border bg-background p-5">
           <h2 className="text-lg font-medium">Place your order</h2>
@@ -185,7 +204,7 @@ export function CheckoutClient({
           <Button
             type="button"
             size="lg"
-            disabled={busy || !selectedId}
+            disabled={busy || !selectedId || !phoneVerified}
             onClick={() => void placeOrder()}
           >
             {busy ? (
@@ -204,6 +223,10 @@ export function CheckoutClient({
           {!selectedId ? (
             <p className="text-sm text-muted-foreground">
               Choose a delivery address above first.
+            </p>
+          ) : !phoneVerified ? (
+            <p className="text-sm text-muted-foreground">
+              Confirm your mobile number above first.
             </p>
           ) : null}
         </section>

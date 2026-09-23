@@ -44,14 +44,21 @@ export type WhatsappOtpInput = {
 };
 
 /**
- * Sends a login code over WhatsApp.
+ * Sends a code over WhatsApp.
  *
- * Throws when unconfigured: a silent no-op here would mean an admin waiting
+ * Unconfigured behaves like a failed email send: in development the code is
+ * printed to the terminal so the flow can be walked end to end, and in
+ * production it throws, because a silent no-op would leave someone waiting
  * for a message that was never going to arrive.
  */
 export async function sendWhatsappOtp({ phone, code }: WhatsappOtpInput): Promise<void> {
   if (!isWhatsappConfigured()) {
-    throw new Error("WhatsApp is not configured.");
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("WhatsApp is not configured.");
+    }
+
+    printDevelopmentFallback(phone, code);
+    return;
   }
 
   const response = await fetch(
@@ -90,4 +97,27 @@ export async function sendWhatsappOtp({ phone, code }: WhatsappOtpInput): Promis
     // Never log the body: it contains the code and the phone number.
     throw new Error(`WhatsApp send failed with status ${response.status}`);
   }
+}
+
+/**
+ * Development-only. Never reached when NODE_ENV is "production".
+ *
+ * Mirrors the email fallback in lib/otp.ts: without it, no phone-verification
+ * flow could be tested at all before Meta approval, which is how a feature
+ * ships broken.
+ */
+function printDevelopmentFallback(phone: string, code: string): void {
+  console.warn(
+    [
+      "",
+      "┌──────────────────────────────────────────────────────────────┐",
+      "│  WHATSAPP NOT CONNECTED — showing the code here instead.     │",
+      "│  Development only. Connect Meta Business and this is sent    │",
+      "│  as a real WhatsApp message.                                 │",
+      "└──────────────────────────────────────────────────────────────┘",
+      `  to:   +91 ${phone}`,
+      `  code: ${code}`,
+      "",
+    ].join("\n"),
+  );
 }
