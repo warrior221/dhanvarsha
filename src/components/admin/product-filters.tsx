@@ -49,7 +49,7 @@ export function AdminProductFilters({
     push(next);
   }
 
-  const lowStock = searchParams.get("lowStock") === "1";
+  const soldOut = searchParams.get("soldOut") === "1";
 
   return (
     <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-background p-3">
@@ -115,11 +115,11 @@ export function AdminProductFilters({
 
       <Button
         type="button"
-        variant={lowStock ? "default" : "outline"}
-        onClick={() => set("lowStock", lowStock ? null : "1")}
+        variant={soldOut ? "default" : "outline"}
+        onClick={() => set("soldOut", soldOut ? null : "1")}
         disabled={isPending}
       >
-        Low stock only
+        Sold out only
       </Button>
     </div>
   );

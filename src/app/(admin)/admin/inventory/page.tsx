@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/table";
 import { requireAdminPage } from "@/lib/auth-guards";
 import { db } from "@/lib/db";
-import { LOW_STOCK_THRESHOLD } from "@/lib/queries/admin-products";
 
 export const metadata: Metadata = {
   title: "Inventory",
@@ -36,10 +35,8 @@ export default async function AdminInventoryPage() {
     },
   });
 
-  const outOfStock = variants.filter((v) => v.stockQty === 0).length;
-  const low = variants.filter(
-    (v) => v.stockQty > 0 && v.stockQty <= LOW_STOCK_THRESHOLD,
-  ).length;
+  const soldOut = variants.filter((v) => v.stockQty === 0).length;
+  const pieces = variants.reduce((sum, v) => sum + v.stockQty, 0);
 
   return (
     <div className="space-y-6">
@@ -51,12 +48,8 @@ export default async function AdminInventoryPage() {
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <SummaryCard label="Out of stock" value={outOfStock} tone="danger" />
-        <SummaryCard
-          label={`Low (${LOW_STOCK_THRESHOLD} or fewer)`}
-          value={low}
-          tone="warn"
-        />
+        <SummaryCard label="Sold out" value={soldOut} tone="plain" />
+        <SummaryCard label="Pieces in stock" value={pieces} tone="plain" />
         <SummaryCard label="Total sizes" value={variants.length} tone="plain" />
       </div>
 
@@ -99,11 +92,9 @@ export default async function AdminInventoryPage() {
 
                   <TableCell>
                     {variant.stockQty === 0 ? (
-                      <Badge variant="destructive">Out of stock</Badge>
-                    ) : variant.stockQty <= LOW_STOCK_THRESHOLD ? (
-                      <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-500">
-                        Low
-                      </Badge>
+                      // Sold out, not "out of stock": the piece went, which
+                      // is what it was there to do.
+                      <Badge variant="outline">Sold out</Badge>
                     ) : (
                       <Badge variant="secondary">In stock</Badge>
                     )}

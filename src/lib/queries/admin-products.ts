@@ -45,11 +45,10 @@ export type AdminProductFilters = {
   /** "active" | "inactive" | "all" */
   status?: string | null;
   /** Only products with a variant at or below the low-stock threshold. */
-  lowStockOnly?: boolean;
+  soldOutOnly?: boolean;
   page?: number;
 };
 
-export const LOW_STOCK_THRESHOLD = 3;
 
 export async function listAdminProducts(
   filters: AdminProductFilters = {},
@@ -71,8 +70,11 @@ export async function listAdminProducts(
   if (filters.status === "active") and.push({ isActive: true });
   if (filters.status === "inactive") and.push({ isActive: false });
 
-  if (filters.lowStockOnly) {
-    and.push({ variants: { some: { stockQty: { lte: LOW_STOCK_THRESHOLD } } } });
+  // Sold out, not "running low". Holding one or two of a piece is normal in
+  // this shop, so a low-stock filter would match almost everything and tell
+  // the owner nothing. Zero is the only count that is actionable.
+  if (filters.soldOutOnly) {
+    and.push({ variants: { every: { stockQty: 0 } } });
   }
 
   const where: Prisma.ProductWhereInput = and.length > 0 ? { AND: and } : {};

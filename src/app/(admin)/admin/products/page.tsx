@@ -16,7 +16,7 @@ import {
 import { requireAdminPage } from "@/lib/auth-guards";
 import { db } from "@/lib/db";
 import { formatInr } from "@/lib/format";
-import { LOW_STOCK_THRESHOLD, listAdminProducts } from "@/lib/queries/admin-products";
+import { listAdminProducts } from "@/lib/queries/admin-products";
 import { AdminProductFilters } from "@/components/admin/product-filters";
 
 export const metadata: Metadata = {
@@ -44,7 +44,7 @@ export default async function AdminProductsPage(props: PageProps<"/admin/product
       q: first("q"),
       categoryId: first("categoryId"),
       status: first("status"),
-      lowStockOnly: first("lowStock") === "1",
+      soldOutOnly: first("soldOut") === "1",
       page: Number(first("page") ?? "1") || 1,
     }),
   ]);
@@ -151,13 +151,10 @@ export default async function AdminProductsPage(props: PageProps<"/admin/product
                   </TableCell>
 
                   <TableCell className="text-right tabular-nums">
-                    <span
-                      className={
-                        row.totalStock <= LOW_STOCK_THRESHOLD
-                          ? "font-medium text-amber-700 dark:text-amber-500"
-                          : undefined
-                      }
-                    >
+                    {/* No amber warning on a low count: one or two of a piece
+                        is the normal holding here, so colouring it as a
+                        problem would flag almost everything, permanently. */}
+                    <span className={row.totalStock === 0 ? "text-muted-foreground" : undefined}>
                       {row.totalStock}
                     </span>
                     <span className="text-xs text-muted-foreground">

@@ -45,6 +45,13 @@ export default async function AdminOrderDetailPage(
           Placed {DATE_TIME.format(new Date(order.placedAt))} ·{" "}
           {order.paymentMethod === "COD" ? "Cash on delivery" : "Paid online"}
         </p>
+
+        <Link
+          href={`/admin/orders/${order.orderNumber}/receipt`}
+          className="mt-2 inline-block text-sm font-medium underline underline-offset-4"
+        >
+          View receipt
+        </Link>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">

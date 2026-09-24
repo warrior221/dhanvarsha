@@ -11,7 +11,6 @@ import {
 import { requireAdminPage } from "@/lib/auth-guards";
 import { db } from "@/lib/db";
 import { formatInr } from "@/lib/format";
-import { LOW_STOCK_THRESHOLD } from "@/lib/queries/admin-products";
 
 export const metadata: Metadata = {
   title: "Admin",
@@ -21,14 +20,15 @@ export const metadata: Metadata = {
 export default async function AdminDashboardPage() {
   const admin = await requireAdminPage();
 
-  const [products, live, outOfStock, lowStock, newOrders, revenue] =
+  const [products, live, soldOut, piecesInStock, newOrders, revenue] =
     await Promise.all([
       db.product.count(),
       db.product.count({ where: { isActive: true } }),
       db.productVariant.count({ where: { stockQty: 0 } }),
-      db.productVariant.count({
-        where: { stockQty: { gt: 0, lte: LOW_STOCK_THRESHOLD } },
-      }),
+      // Pieces actually on the shelf. More useful than a "low stock" warning
+      // in a shop where one or two of a piece IS the normal holding, and a
+      // threshold alert would simply fire on everything, forever.
+      db.productVariant.aggregate({ _sum: { stockQty: true } }),
       db.order.count({ where: { status: "PENDING" } }),
       // Revenue excludes cancelled and returned orders — money that came back
       // is not revenue.
@@ -57,17 +57,13 @@ export default async function AdminDashboardPage() {
           tone={newOrders > 0 ? "warn" : "plain"}
         />
         <Stat label="Products" value={products} hint={`${live} visible in the shop`} />
+        {/* Sold out is NOT an alarm here: a one-of-a-kind piece selling is
+            the point. It is shown plainly, in the ordinary colour. */}
+        <Stat label="Sold out" value={soldOut} hint="Pieces that have gone" />
         <Stat
-          label="Out of stock"
-          value={outOfStock}
-          hint="Sizes at zero"
-          tone={outOfStock > 0 ? "danger" : "plain"}
-        />
-        <Stat
-          label="Low stock"
-          value={lowStock}
-          hint={`${LOW_STOCK_THRESHOLD} or fewer left`}
-          tone={lowStock > 0 ? "warn" : "plain"}
+          label="Pieces in stock"
+          value={piecesInStock._sum.stockQty ?? 0}
+          hint="Across every size"
         />
       </div>
 

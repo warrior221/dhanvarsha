@@ -72,6 +72,13 @@ export default async function OrderDetailPage(
         {order.paymentMethod === "COD" ? "Cash on delivery" : "Paid online"}
       </p>
 
+      <Link
+        href={`/account/orders/${order.orderNumber}/receipt`}
+        className="mt-2 inline-block text-sm font-medium underline underline-offset-4"
+      >
+        View receipt
+      </Link>
+
       {order.trackingNumber ? (
         <div className="mt-4 rounded-lg border bg-background p-4 text-sm">
           <p className="font-medium">On its way</p>

@@ -16,7 +16,15 @@ export type VariantOption = {
   stockQty: number;
 };
 
-const LOW_STOCK_THRESHOLD = 3;
+/**
+ * At or below this, the shopper is told how few are left.
+ *
+ * This is a SCARCITY CUE for the customer, not a restock warning for the
+ * shop. Most pieces here are held one or two at a time, so "Only 1 left" is
+ * simply true — and it is the most useful thing a shopper can know about a
+ * saree they are hesitating over.
+ */
+const SCARCITY_THRESHOLD = 3;
 
 /** A variant with no size recorded still needs a label to pick. */
 function labelFor(variant: VariantOption): string {
@@ -179,7 +187,7 @@ export function ProductActions({
 
       {selected ? (
         <p className="text-sm" aria-live="polite">
-          {selected.stockQty <= LOW_STOCK_THRESHOLD ? (
+          {selected.stockQty <= SCARCITY_THRESHOLD ? (
             <span className="font-medium text-amber-700 dark:text-amber-500">
               Only {selected.stockQty} left
             </span>

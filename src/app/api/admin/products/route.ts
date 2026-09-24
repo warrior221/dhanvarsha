@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
         q: params.get("q"),
         categoryId: params.get("categoryId"),
         status: params.get("status"),
-        lowStockOnly: params.get("lowStock") === "1",
+        soldOutOnly: params.get("soldOut") === "1",
         page: Number(params.get("page") ?? "1") || 1,
       }),
     );

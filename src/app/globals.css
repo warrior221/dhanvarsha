@@ -143,3 +143,35 @@
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/*
+ * Printing a receipt.
+ *
+ * The browser's own print dialog is also "Save as PDF" everywhere, so this is
+ * all that is needed for a customer to keep a copy and for the shop to put
+ * one in the parcel — no PDF library to keep alive for years.
+ *
+ * Anything marked print:hidden (navigation, buttons) drops out, and colours
+ * are forced to plain black on white so a receipt does not come out of a
+ * home printer in grey boxes.
+ */
+@media print {
+  @page {
+    margin: 16mm;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  /* Ink is expensive and a receipt is a document, not a design. */
+  * {
+    box-shadow: none !important;
+  }
+
+  a[href]::after {
+    content: "";
+  }
+}
