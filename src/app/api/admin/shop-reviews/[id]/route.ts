@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth-guards";
@@ -26,6 +27,13 @@ export async function PATCH(
 
     await setShopReviewPublished(id, isPublished);
 
+    // The home page renders per request today, because the layout reads the
+    // cart cookie. That is incidental: if it ever stopped doing so the page
+    // could be served from cache and an approved review would never appear.
+    // Saying so explicitly costs nothing and removes the trap.
+    revalidatePath("/");
+    revalidatePath("/reviews");
+
     return apiSuccess({ reviews: await listShopReviewsForAdmin() });
   } catch (error) {
     return handleApiError(error, `PATCH ${ROUTE}`);
@@ -41,6 +49,9 @@ export async function DELETE(
 
     const { id } = await context.params;
     await deleteShopReview(id);
+
+    revalidatePath("/");
+    revalidatePath("/reviews");
 
     return apiSuccess({ reviews: await listShopReviewsForAdmin() });
   } catch (error) {

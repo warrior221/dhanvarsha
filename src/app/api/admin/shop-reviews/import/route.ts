@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth-guards";
 import { apiSuccess, handleApiError } from "@/lib/errors";
 import { importGoogleReviews, listShopReviewsForAdmin } from "@/lib/queries/shop-reviews";
@@ -10,6 +11,9 @@ export async function POST() {
     await requireAdmin();
 
     const result = await importGoogleReviews();
+
+    revalidatePath("/");
+    revalidatePath("/reviews");
 
     return apiSuccess({ ...result, reviews: await listShopReviewsForAdmin() });
   } catch (error) {

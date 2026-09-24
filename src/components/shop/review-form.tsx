@@ -20,8 +20,9 @@ import { cn } from "@/lib/utils";
  * server enforces the rule either way, so this is only about not wasting
  * someone's time.
  *
- * Says plainly that it is read before it appears. A review that vanishes with
- * no explanation reads as a broken form, and the writer sends it again.
+ * The thank-you deliberately does not mention that a review is checked before
+ * it goes up. It also does not claim the review is live, which would be
+ * untrue — it simply thanks them and stops.
  */
 export function ReviewForm({
   defaultName,
@@ -82,8 +83,7 @@ export function ReviewForm({
     return (
       <Alert role="status">
         <AlertDescription>
-          <strong>Thank you.</strong> We read every review before it goes up, so
-          yours will appear shortly.
+          <strong>Thank you.</strong> We appreciate you taking the time.
         </AlertDescription>
       </Alert>
     );
@@ -149,8 +149,7 @@ export function ReviewForm({
           onChange={(event) => setBody(event.target.value)}
         />
         <p className="text-xs text-muted-foreground">
-          {MAX_BODY_LENGTH - body.length} characters left. Reviews are read
-          before they appear on the site.
+          {MAX_BODY_LENGTH - body.length} characters left.
         </p>
       </div>
 
