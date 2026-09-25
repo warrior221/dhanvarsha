@@ -33,6 +33,18 @@ import { classifyIdentifier, loginSchema } from "@/lib/validations/auth";
 
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
 
+/**
+ * How often a still-active session gets its 30 days pushed back.
+ *
+ * Without this the clock starts at sign-in and never moves, so a shopper who
+ * visits every week is still thrown out on day 30 for no reason they can see.
+ * Rolling it forward means only real absence signs you out.
+ *
+ * Once a day, not once a request: this is a database write, and a shopper
+ * clicking through twenty products should not cause twenty of them.
+ */
+const SESSION_EXTEND_EVERY_SECONDS = 60 * 60 * 24; // 1 day
+
 /** Thrown when the password is right but the email was never verified. */
 class EmailNotVerifiedError extends CredentialsSignin {
   code = "email_not_verified";
@@ -47,6 +59,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     // Forced by Auth.js for credentials. Revocation is handled below.
     strategy: "jwt",
     maxAge: SESSION_MAX_AGE_SECONDS,
+    // Re-issues the cookie with a fresh 30-day expiry on reads, so the
+    // cookie's clock rolls forward alongside the database row's.
+    updateAge: SESSION_EXTEND_EVERY_SECONDS,
   },
 
   pages: {
@@ -161,6 +176,21 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // Pick up role changes without forcing a re-login.
       token.role = session.user.role;
       token.sessionId = session.id;
+
+      // Roll the expiry forward for someone who is still using the shop, at
+      // most once a day. Anyone who stays away the full 30 days still falls
+      // out, which is the point of having an expiry at all.
+      const fullTerm = Date.now() + SESSION_MAX_AGE_SECONDS * 1000;
+
+      if (fullTerm - session.expiresAt.getTime() > SESSION_EXTEND_EVERY_SECONDS * 1000) {
+        await db.session
+          .update({ where: { id: session.id }, data: { expiresAt: new Date(fullTerm) } })
+          // A failed extension is not a reason to sign someone out; the
+          // session is still valid until its existing expiry.
+          .catch((error: unknown) => {
+            console.error("[auth] Could not extend session:", error);
+          });
+      }
 
       return token;
     },
