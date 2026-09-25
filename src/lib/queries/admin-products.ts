@@ -160,6 +160,7 @@ export type AdminProductDetail = {
   isReadymade: boolean;
   isActive: boolean;
   careInstructions: string;
+  silkMarkNumber: string;
   images: { url: string; publicId: string; altText: string }[];
   variants: { id: string; size: string; sku: string; price: string; stockQty: number }[];
   attributeValueIds: string[];
@@ -180,6 +181,7 @@ export async function getAdminProduct(id: string): Promise<AdminProductDetail | 
       isReadymade: true,
       isActive: true,
       careInstructions: true,
+      silkMarkNumber: true,
       cost: { select: { costPrice: true, supplierName: true, purchaseNote: true } },
       images: {
         select: { url: true, publicId: true, altText: true },
@@ -209,6 +211,7 @@ export async function getAdminProduct(id: string): Promise<AdminProductDetail | 
     isReadymade: product.isReadymade,
     isActive: product.isActive,
     careInstructions: product.careInstructions ?? "",
+    silkMarkNumber: product.silkMarkNumber ?? "",
     images: product.images,
     variants: product.variants.map((variant) => ({
       id: variant.id,
@@ -244,6 +247,7 @@ export async function createProduct(input: ProductFormInput): Promise<string> {
         isReadymade: input.isReadymade,
         isActive: input.isActive,
         careInstructions: emptyToNull(input.careInstructions),
+        silkMarkNumber: emptyToNull(input.silkMarkNumber),
       },
       select: { id: true },
     });
@@ -353,6 +357,7 @@ export async function updateProduct(id: string, input: ProductFormInput): Promis
         isReadymade: input.isReadymade,
         isActive: input.isActive,
         careInstructions: emptyToNull(input.careInstructions),
+        silkMarkNumber: emptyToNull(input.silkMarkNumber),
       },
     });
 

@@ -20,7 +20,10 @@ export default async function CustomerLayout({ children }: LayoutProps<"/">) {
       {/* Seeds the client stores so the bag badge is correct on first paint. */}
       <StoreHydrator cart={cart} wishlist={wishlist} />
       <Navbar />
-      <div className="flex-1">{children}</div>
+      {/* The single <main> landmark for every customer route. Pages and their
+          loading skeletons render only the inside of it, so a streamed-in page
+          and its fallback can never leave two <main> elements in the DOM. */}
+      <main className="flex-1">{children}</main>
       <Footer />
     </div>
   );

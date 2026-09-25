@@ -45,7 +45,7 @@ export default async function OrderDetailPage(
   const justPlaced = searchParams.placed === "1";
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-8">
+    <div className="mx-auto max-w-3xl px-4 py-8">
       <Link
         href="/account/orders"
         className="text-sm text-muted-foreground hover:underline"
@@ -190,7 +190,7 @@ export default async function OrderDetailPage(
           </ol>
         </section>
       </div>
-    </main>
+    </div>
   );
 }
 

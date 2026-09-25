@@ -48,6 +48,8 @@ type CategorySeed = {
   name: string;
   slug: string;
   position: number;
+  /** Tile for the home page. Null falls back to the newest product's photo. */
+  imageUrl?: string;
 };
 
 type AttributeSeed = {
@@ -90,9 +92,12 @@ type ProductSeed = {
 /* ------------------------------------------------------------------ */
 
 const categories: CategorySeed[] = [
-  { name: "Saree", slug: "saree", position: 1 },
+  { name: "Saree", slug: "saree", position: 1, imageUrl: "/categories/saree.webp" },
   { name: "Lehenga", slug: "lehenga", position: 2 },
   { name: "Suit", slug: "suit", position: 3 },
+  { name: "Men's Kurta Pyjama", slug: "kurta-pyjama", position: 4 },
+  { name: "Dupatta", slug: "dupatta", position: 5 },
+  { name: "Crop Top", slug: "crop-top", position: 6 },
 ];
 
 const attributes: AttributeSeed[] = [
@@ -265,7 +270,41 @@ const products: ProductSeed[] = [
 /* Seeding                                                             */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Adds or renames the categories, and nothing else.
+ *
+ * Kept separate because a full seed is NOT safe against a live shop: it
+ * resets the shipping rules to their defaults, undoing any delivery charge
+ * set in the admin screen, and rebuilds the placeholder products. Adding a
+ * category should cost neither, so:
+ *
+ *     npx tsx prisma/seed.ts --categories-only
+ *
+ * Upserted by slug, so running it twice changes nothing, and renaming one
+ * here renames it in place with its products still attached.
+ */
+async function seedCategories(): Promise<void> {
+  for (const category of categories) {
+    await db.category.upsert({
+      where: { slug: category.slug },
+      update: {
+        name: category.name,
+        position: category.position,
+        imageUrl: category.imageUrl ?? null,
+      },
+      create: category,
+    });
+  }
+  console.log(`  categories: ${categories.length}`);
+}
+
 async function main(): Promise<void> {
+  if (process.argv.includes("--categories-only")) {
+    await seedCategories();
+    console.log("Done. Nothing else was touched.");
+    return;
+  }
+
   console.log("Seeding database...\n");
 
   // 0. Shipping rules --------------------------------------------------
@@ -288,14 +327,7 @@ async function main(): Promise<void> {
   console.log(`  shipping:   ${shippingRules.length} rules`);
 
   // 1. Categories -----------------------------------------------------
-  for (const category of categories) {
-    await db.category.upsert({
-      where: { slug: category.slug },
-      update: { name: category.name, position: category.position },
-      create: category,
-    });
-  }
-  console.log(`  categories: ${categories.length}`);
+  await seedCategories();
 
   // 2. Attributes and their values ------------------------------------
   // Maps "<attribute-slug>:<value-slug>" -> AttributeValue id, so products

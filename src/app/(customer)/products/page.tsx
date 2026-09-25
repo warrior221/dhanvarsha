@@ -13,7 +13,8 @@ import { getCatalogPage, getFilterableAttributes } from "@/lib/queries/catalog";
 
 export const metadata: Metadata = {
   title: "Shop all",
-  description: "Browse sarees, lehengas and suits by occasion, fabric and style.",
+  description:
+    "Browse sarees, lehengas, suits, kurta sets, dupattas and crop tops by occasion, fabric and style.",
 };
 
 export default async function ProductsPage(props: PageProps<"/products">) {
@@ -41,7 +42,7 @@ export default async function ProductsPage(props: PageProps<"/products">) {
     Object.keys(params.attributeFilters).length > 0;
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8">
+    <div className="shell py-8">
       <h1 className="text-2xl font-semibold">Shop all</h1>
 
       <div className="mt-6 lg:grid lg:grid-cols-[16rem_1fr] lg:gap-10">
@@ -78,7 +79,7 @@ export default async function ProductsPage(props: PageProps<"/products">) {
             />
           ) : (
             <>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-8 lg:grid-cols-3 xl:grid-cols-4">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-8 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                 {products.map((product, index) => (
                   <ProductCard
                     key={product.id}
@@ -97,6 +98,6 @@ export default async function ProductsPage(props: PageProps<"/products">) {
           )}
         </div>
       </div>
-    </main>
+    </div>
   );
 }

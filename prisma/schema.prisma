@@ -104,6 +104,9 @@ model Category {
   name     String
   slug     String    @unique
   position Int       @default(0)
+  /// Tile shown on the home page. Without one the card falls back to the
+  /// newest product's photo, which leaves a brand-new category blank.
+  imageUrl String?
   products Product[]
 }
 
@@ -122,6 +125,11 @@ model Product {
   isReadymade      Boolean                 @default(false)
   careInstructions String?
   isActive         Boolean                 @default(true)
+  /// Silk Mark hologram number, when this piece carries one. Set per piece,
+  /// never derived from the fabric: the Silk Mark Organisation certifies an
+  /// individual saree with a numbered tag, so "made of silk" is not the same
+  /// claim as "Silk Mark certified".
+  silkMarkNumber   String?
 
   cost             ProductCost?
   attributes       ProductAttributeValue[]

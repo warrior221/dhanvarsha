@@ -30,7 +30,7 @@ export default async function CheckoutPage() {
   if (cart.items.length === 0) redirect("/cart");
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-8">
+    <div className="mx-auto max-w-5xl px-4 py-8">
       <h1 className="mb-6 text-2xl font-semibold">Checkout</h1>
       <CheckoutClient
         addresses={addresses}
@@ -38,6 +38,6 @@ export default async function CheckoutPage() {
         totals={totals}
         phone={phone}
       />
-    </main>
+    </div>
   );
 }

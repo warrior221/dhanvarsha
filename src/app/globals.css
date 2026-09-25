@@ -10,6 +10,13 @@
   --font-sans: var(--font-sans);
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-sans);
+  /* Cinzel: Roman inscriptional capitals, the face on the shop's logo.
+     Reserved for the wordmark — it is a display face, unreadable at
+     body sizes. */
+  --font-display: var(--font-cinzel);
+  --color-silk: var(--silk);
+  --color-gold: var(--gold);
+  --color-gold-bright: var(--gold-bright);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -129,6 +136,48 @@
   }
 }
 /*
+ * The page shell.
+ *
+ * How wide the shop runs, in one place. A dozen pages plus the header and
+ * footer have to agree on this or nothing lines up down the left edge, so
+ * changing the number here changes it everywhere.
+ *
+ * Wide on purpose: on a 1920px screen a 1152px container left 384px of empty
+ * paper down each side, which on a shop reads as a half-finished page rather
+ * than as breathing room.
+ */
+.shell {
+  --shell-gutter: 1rem;
+  margin-inline: auto;
+  max-width: 120rem;
+  padding-inline: var(--shell-gutter);
+}
+
+@media (min-width: 1024px) {
+  .shell {
+    --shell-gutter: 2rem;
+  }
+}
+
+/*
+ * A rail inside the shell that scrolls out to the screen edge.
+ *
+ * Takes its measurement from the shell's own gutter rather than repeating
+ * it, so the two cannot drift apart when the gutter changes.
+ */
+.shell-bleed {
+  margin-inline: calc(var(--shell-gutter) * -1);
+  padding-inline: var(--shell-gutter);
+  /*
+   * Snapping otherwise ignores the padding: scroll-snap-align: start lines a
+   * card up with the padding BOX, so the first card parked itself flush
+   * against the screen edge while the last one kept its gutter. This insets
+   * the snap area by the same amount, so both ends rest alike.
+   */
+  scroll-padding-inline: var(--shell-gutter);
+}
+
+/*
  * The home-page review strip.
  *
  * It is a real scrolling element so it can be swiped and dragged, which means
@@ -142,6 +191,52 @@
 
 .no-scrollbar::-webkit-scrollbar {
   display: none;
+}
+
+/*
+ * The shop's own two colours, sampled from the logo artwork rather than
+ * guessed: the deep red of the silk and the gold of the lettering.
+ */
+:root {
+  --silk: #3f1210;
+  --gold: #dec08b;
+  --gold-bright: #f4d8a5;
+}
+
+/*
+ * The silk bar.
+ *
+ * Background is a tile cut from the logo's own fabric, wrap-blended so it
+ * repeats without a seam. Gold on it measures 9.3:1 at the weave's median
+ * and 4.9:1 against its brightest thread, so the text clears AA even where
+ * the cloth catches the light.
+ *
+ * Rather than restyle every control, the bar rebinds the design tokens for
+ * its own subtree — each button, input and badge inside reads these and
+ * recolours itself. The cart drawer opens in a portal outside the header, so
+ * it stays on paper.
+ *
+ * The same red in both themes: it is a photograph of a fabric, not a surface
+ * that ought to invert.
+ */
+.silk-bar {
+  background-color: var(--silk);
+  background-image: url("/brand/silk-tile.jpg");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+  color: var(--gold);
+
+  --foreground: var(--gold);
+  --muted-foreground: color-mix(in srgb, var(--gold) 70%, transparent);
+  --muted: color-mix(in srgb, var(--gold-bright) 14%, transparent);
+  --border: color-mix(in srgb, var(--gold) 22%, transparent);
+  --input: color-mix(in srgb, var(--gold) 30%, transparent);
+  --ring: var(--gold);
+  --primary: var(--gold);
+  --primary-foreground: var(--silk);
+  /* Outline buttons paint bg-background. Transparent lets the weave show
+     through instead of stamping a flat patch across it. */
+  --background: transparent;
 }
 
 /*

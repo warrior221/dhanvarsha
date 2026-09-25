@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { SilkMark } from "@/components/shop/silk-mark";
 import { ProductGallery } from "@/components/product/product-gallery";
 import { ProductActions } from "@/components/product/product-actions";
 import { Price } from "@/components/shared/price";
@@ -81,7 +82,7 @@ export default async function ProductDetailPage(
   };
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8">
+    <div className="shell py-8">
       {/*
         JSON.stringify does not escape HTML, so "<" is replaced with its unicode
         form to close off script injection through a product name or
@@ -107,7 +108,11 @@ export default async function ProductDetailPage(
         </Link>
       </nav>
 
-      <div className="grid gap-10 lg:grid-cols-2">
+      {/* The photo takes the extra width; the buying column does not. A saree
+          is worth looking at large, but a 900px line of care instructions is
+          not worth reading, and an Add to bag button that wide reads as a
+          banner rather than a button. */}
+      <div className="grid gap-10 lg:grid-cols-[1fr_minmax(0,30rem)] xl:gap-16">
         <ProductGallery images={product.images} />
 
         <div className="space-y-6">
@@ -155,6 +160,25 @@ export default async function ProductDetailPage(
             </div>
           ) : null}
 
+          {/* Shown only for a piece with a hologram number recorded against it.
+              Never derived from the fabric: the Silk Mark Organisation
+              certifies an individual saree with a numbered tag, so "silk" and
+              "Silk Mark certified" are different claims, and only one of them
+              is ours to make. */}
+          {product.silkMarkNumber ? (
+            <div className="flex items-start gap-3 rounded-lg border bg-muted/30 p-4">
+              <SilkMark size={52} className="shrink-0" />
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium">Silk Mark certified pure silk</p>
+                <p className="text-xs text-muted-foreground">
+                  Hologram no.{" "}
+                  <span className="font-mono">{product.silkMarkNumber}</span> · issued
+                  by the Silk Mark Organisation of India
+                </p>
+              </div>
+            </div>
+          ) : null}
+
           {product.careInstructions ? (
             <div className="space-y-2">
               <h2 className="text-sm font-medium">Care</h2>
@@ -163,6 +187,6 @@ export default async function ProductDetailPage(
           ) : null}
         </div>
       </div>
-    </main>
+    </div>
   );
 }

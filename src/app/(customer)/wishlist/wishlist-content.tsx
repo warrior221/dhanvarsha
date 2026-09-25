@@ -20,7 +20,7 @@ export function WishlistContent() {
   if (!hydrated) {
     return (
       <div
-        className="grid grid-cols-2 gap-x-4 gap-y-8 lg:grid-cols-3 xl:grid-cols-4"
+        className="grid grid-cols-2 gap-x-4 gap-y-8 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
         aria-busy="true"
       >
         <span className="sr-only">Loading your wishlist…</span>
@@ -66,7 +66,7 @@ export function WishlistContent() {
         </Alert>
       ) : null}
 
-      <ul className="grid grid-cols-2 gap-x-4 gap-y-8 lg:grid-cols-3 xl:grid-cols-4">
+      <ul className="grid grid-cols-2 gap-x-4 gap-y-8 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
         {wishlist.products.map((product) => (
           <WishlistCard key={product.id} product={product} />
         ))}

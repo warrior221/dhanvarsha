@@ -44,6 +44,7 @@ export type ProductFormValues = {
   isReadymade: boolean;
   isActive: boolean;
   careInstructions: string;
+  silkMarkNumber: string;
   images: EditableImage[];
   variants: EditableVariant[];
   attributeValueIds: string[];
@@ -63,6 +64,7 @@ const BLANK: ProductFormValues = {
   isReadymade: false,
   isActive: true,
   careInstructions: "",
+  silkMarkNumber: "",
   images: [],
   variants: [],
   attributeValueIds: [],
@@ -233,6 +235,20 @@ export function ProductForm({
             value={values.careInstructions}
             onChange={(event) => set("careInstructions", event.target.value)}
             placeholder="Dry clean only."
+          />
+        </Field>
+
+        <Field
+          label="Silk Mark number"
+          error={fieldErrors.silkMarkNumber}
+          htmlFor="silk-mark"
+          hint="Optional. The number on the Silk Mark hologram tag attached to this piece. Fill it in only for a piece that actually carries one — the badge on the shop is a certification claim, not a description of the fabric."
+        >
+          <Input
+            id="silk-mark"
+            value={values.silkMarkNumber}
+            onChange={(event) => set("silkMarkNumber", event.target.value)}
+            placeholder="e.g. 1234567"
           />
         </Field>
 

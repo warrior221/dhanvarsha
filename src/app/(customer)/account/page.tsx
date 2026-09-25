@@ -19,7 +19,7 @@ export default async function AccountPage() {
   ]);
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-8">
+    <div className="mx-auto max-w-3xl px-4 py-8">
       <h1 className="text-2xl font-semibold">Your account</h1>
       <p className="text-muted-foreground">
         {user.name ? `${user.name} · ` : ""}
@@ -46,7 +46,7 @@ export default async function AccountPage() {
           value={savedCount}
         />
       </div>
-    </main>
+    </div>
   );
 }
 

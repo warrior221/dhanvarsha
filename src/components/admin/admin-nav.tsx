@@ -22,7 +22,7 @@ export function AdminNav() {
   return (
     <nav
       aria-label="Admin sections"
-      className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-2 pb-2"
+      className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-2 pb-2 print:hidden"
     >
       {LINKS.map((link) => {
         const active =

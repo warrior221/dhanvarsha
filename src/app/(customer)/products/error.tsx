@@ -20,12 +20,12 @@ export default function ProductsError({
   }, [error]);
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-16">
+    <div className="shell py-16">
       <ErrorState
         title="We could not load the shop"
         description="Something went wrong on our side. Please try again in a moment."
         action={<Button onClick={reset}>Try again</Button>}
       />
-    </main>
+    </div>
   );
 }

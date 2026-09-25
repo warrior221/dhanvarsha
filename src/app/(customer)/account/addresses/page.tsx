@@ -14,13 +14,13 @@ export default async function AddressesPage() {
   const addresses = await listAddresses(user.id);
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-8">
+    <div className="mx-auto max-w-3xl px-4 py-8">
       <Link href="/account" className="text-sm text-muted-foreground hover:underline">
         ← Your account
       </Link>
       <h1 className="mb-6 mt-2 text-2xl font-semibold">Your addresses</h1>
 
       <AddressBook initial={addresses} />
-    </main>
+    </div>
   );
 }

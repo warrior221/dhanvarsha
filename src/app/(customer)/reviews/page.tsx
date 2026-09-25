@@ -17,7 +17,7 @@ export default async function ReviewsPage() {
   ]);
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-8">
+    <div className="mx-auto max-w-3xl px-4 py-8">
       <h1 className="text-2xl font-semibold">Customer reviews</h1>
 
       {average !== null ? (
@@ -64,6 +64,6 @@ export default async function ReviewsPage() {
           ))}
         </ul>
       ) : null}
-    </main>
+    </div>
   );
 }

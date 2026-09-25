@@ -4,7 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 /** Shown while the catalog server component fetches (spec 1.9). */
 export default function ProductsLoading() {
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8">
+    <div className="shell py-8">
       <Skeleton className="h-8 w-40" />
 
       <div className="mt-6 lg:grid lg:grid-cols-[16rem_1fr] lg:gap-10">
@@ -27,6 +27,6 @@ export default function ProductsLoading() {
           <ProductGridSkeleton />
         </div>
       </div>
-    </main>
+    </div>
   );
 }

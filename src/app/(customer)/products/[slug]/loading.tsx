@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
  */
 export default function ProductDetailLoading() {
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8">
+    <div className="shell py-8">
       <Skeleton className="mb-6 h-4 w-40" />
 
       <div className="grid gap-10 lg:grid-cols-2">
@@ -30,6 +30,6 @@ export default function ProductDetailLoading() {
           <Skeleton className="h-24 w-full" />
         </div>
       </div>
-    </main>
+    </div>
   );
 }

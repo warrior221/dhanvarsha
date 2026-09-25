@@ -24,7 +24,7 @@ export default async function CustomerReceiptPage(
   if (!receipt) notFound();
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-8">
+    <div className="mx-auto max-w-3xl px-4 py-8">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3 print:hidden">
         <Link
           href={`/account/orders/${receipt.orderNumber}`}
@@ -36,6 +36,6 @@ export default async function CustomerReceiptPage(
       </div>
 
       <OrderReceipt receipt={receipt} />
-    </main>
+    </div>
   );
 }

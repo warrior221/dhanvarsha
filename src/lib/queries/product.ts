@@ -20,6 +20,7 @@ export const publicProductSelect = {
   sellingPrice: true,
   isReadymade: true,
   careInstructions: true,
+  silkMarkNumber: true,
   category: { select: { id: true, name: true, slug: true } },
   images: {
     select: { url: true, altText: true, position: true },
@@ -131,6 +132,8 @@ export type ProductView = {
   sellingPrice: string;
   isReadymade: boolean;
   careInstructions: string | null;
+  /** Set only on a piece that carries a Silk Mark hologram tag. */
+  silkMarkNumber: string | null;
   category: { id: string; name: string; slug: string };
   images: { url: string; altText: string; position: number }[];
   variants: { id: string; size: string | null; price: string; stockQty: number }[];
@@ -196,6 +199,7 @@ export function toProductView(product: RawProduct): ProductView {
     sellingPrice: product.sellingPrice.toString(),
     isReadymade: product.isReadymade,
     careInstructions: product.careInstructions,
+    silkMarkNumber: product.silkMarkNumber,
     category: product.category,
     images: product.images,
     variants: [...product.variants].sort(compareVariants).map((variant) => ({

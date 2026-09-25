@@ -41,7 +41,7 @@ export function SearchBox({ className }: { className?: string }) {
 
       <div className="relative">
         <Search
-          className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+          className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-neutral-500"
           aria-hidden
         />
         <Input
@@ -50,7 +50,11 @@ export function SearchBox({ className }: { className?: string }) {
           type="search"
           value={value}
           placeholder="Search sarees, lehengas…"
-          className="h-9 pl-8"
+          // Paper, not silk. A field has to look like something you can
+          // type into, and the words you type belong on white rather than
+          // on brocade. Colours are set outright instead of inherited,
+          // because the bar rebinds the tokens around it to gold.
+          className="h-9 border-transparent bg-white pl-8 text-neutral-900 placeholder:text-neutral-500 dark:bg-white"
           onChange={(event) => setValue(event.target.value)}
         />
       </div>

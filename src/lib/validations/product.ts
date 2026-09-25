@@ -89,6 +89,7 @@ export const productFormSchema = z
     isReadymade: z.boolean().default(false),
     isActive: z.boolean().default(true),
     careInstructions: z.string().trim().max(1000).optional().or(z.literal("")),
+    silkMarkNumber: z.string().trim().max(60).optional().or(z.literal("")),
 
     images: z
       .array(productImageSchema)
