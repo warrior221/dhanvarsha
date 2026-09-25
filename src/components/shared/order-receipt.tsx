@@ -1,5 +1,5 @@
 import { orderStatusLabel } from "@/components/shared/order-status-badge";
-import type { OrderStatus } from "@prisma/client";
+import type { OrderStatus } from "@/generated/prisma";
 import type { Receipt } from "@/lib/queries/receipt";
 
 /**

@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import type { Role } from "@prisma/client";
+import type { Role } from "@/generated/prisma";
 import bcrypt from "bcryptjs";
 import NextAuth from "next-auth";
 import { CredentialsSignin } from "next-auth";

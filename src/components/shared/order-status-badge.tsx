@@ -1,4 +1,4 @@
-import type { OrderStatus } from "@prisma/client";
+import type { OrderStatus } from "@/generated/prisma";
 import { Badge } from "@/components/ui/badge";
 
 /** Plain-language labels; customers should not have to read enum names. */

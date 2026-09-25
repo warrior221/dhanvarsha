@@ -1,4 +1,4 @@
-import type { AttributeInputType, Prisma } from "@prisma/client";
+import type { AttributeInputType, Prisma } from "@/generated/prisma";
 
 /**
  * Catalog types and pure functions — NO database import.

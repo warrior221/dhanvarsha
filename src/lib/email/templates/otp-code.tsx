@@ -1,4 +1,4 @@
-import type { OtpPurpose } from "@prisma/client";
+import type { OtpPurpose } from "@/generated/prisma";
 import {
   Body,
   Container,

@@ -1,4 +1,4 @@
-import { OrderStatus } from "@prisma/client";
+import { OrderStatus } from "@/generated/prisma";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth-guards";

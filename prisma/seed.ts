@@ -1,6 +1,6 @@
 import path from "node:path";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { AttributeInputType, PrismaClient } from "@prisma/client";
+import { AttributeInputType, PrismaClient } from "../src/generated/prisma";
 
 /**
  * Seed data for local development.

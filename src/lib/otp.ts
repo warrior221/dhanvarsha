@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 import type { ReactElement } from "react";
-import { OtpChannel, OtpPurpose } from "@prisma/client";
+import { OtpChannel, OtpPurpose } from "@/generated/prisma";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { sendEmail } from "@/lib/email/client";

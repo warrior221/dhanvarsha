@@ -1,5 +1,12 @@
 generator client {
   provider = "prisma-client-js"
+  /// Generated inside src/ rather than into node_modules so the dev server
+  /// WATCHES it. In node_modules a running `next dev` keeps the pre-migration
+  /// client in memory, and the next query fails with "Unknown field …" while
+  /// pointing the blame at your own page code. Here a regenerate is an
+  /// ordinary file change and Turbopack reloads. The folder is generated, not
+  /// written by hand, so it is gitignored and rebuilt by postinstall.
+  output   = "../src/generated/prisma"
 }
 
 // Prisma 7 no longer accepts `url` here. The connection string for migrate /

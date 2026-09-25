@@ -1,6 +1,6 @@
 "use client";
 
-import type { OrderStatus } from "@prisma/client";
+import type { OrderStatus } from "@/generated/prisma";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";

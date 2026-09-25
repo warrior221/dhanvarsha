@@ -42,3 +42,7 @@ next-env.d.ts
 
 # Commit the template, never the real values
 !.env.example
+
+# Prisma client, generated into src/ so the dev server watches it.
+# Rebuilt by `prisma generate`, which postinstall runs.
+/src/generated/

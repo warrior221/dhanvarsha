@@ -1,4 +1,4 @@
-import { OrderStatus, PaymentMethod, Prisma } from "@prisma/client";
+import { OrderStatus, PaymentMethod, Prisma } from "@/generated/prisma";
 import { paiseToDecimal } from "@/lib/cart";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";

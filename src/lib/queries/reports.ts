@@ -1,4 +1,4 @@
-import { OrderStatus, type Prisma } from "@prisma/client";
+import { OrderStatus, type Prisma } from "@/generated/prisma";
 import { paiseToDecimal } from "@/lib/cart";
 import { db } from "@/lib/db";
 import { formatInr, toPaise } from "@/lib/format";

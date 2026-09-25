@@ -1,4 +1,4 @@
-import { OtpChannel, OtpPurpose, Role } from "@prisma/client";
+import { OtpChannel, OtpPurpose, Role } from "@/generated/prisma";
 import bcrypt from "bcryptjs";
 import type { NextRequest } from "next/server";
 import { db } from "@/lib/db";

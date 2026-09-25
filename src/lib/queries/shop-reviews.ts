@@ -1,4 +1,4 @@
-import type { ShopReviewSource } from "@prisma/client";
+import type { ShopReviewSource } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { fetchGoogleReviews, isGoogleReviewsConfigured } from "@/lib/google-places";

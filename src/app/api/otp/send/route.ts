@@ -1,4 +1,4 @@
-import { OtpChannel, OtpPurpose } from "@prisma/client";
+import { OtpChannel, OtpPurpose } from "@/generated/prisma";
 import type { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { AppError, apiSuccess, handleApiError } from "@/lib/errors";

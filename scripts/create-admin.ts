@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import path from "node:path";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient, Role } from "@prisma/client";
+import { PrismaClient, Role } from "../src/generated/prisma";
 
 /**
  * Creates an administrator. RUN MANUALLY FROM A TERMINAL:

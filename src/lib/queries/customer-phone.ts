@@ -1,4 +1,4 @@
-import { OtpChannel, OtpPurpose } from "@prisma/client";
+import { OtpChannel, OtpPurpose } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { sendOtp, verifyOtp } from "@/lib/otp";
