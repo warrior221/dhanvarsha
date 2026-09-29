@@ -427,8 +427,23 @@ async function main(): Promise<void> {
     });
 
     // Variants — upserted by SKU so stock edits are not clobbered on re-run.
+    //
+    // A NEW variant is created empty and then given its stock as an
+    // OPENING_BALANCE movement, so the ledger can account for every piece the
+    // shop has, including seeded ones. An EXISTING variant is left alone: its
+    // stock belongs to the ledger by then, and overwriting it here would put
+    // the two permanently out of step.
+    //
+    // Written directly rather than through moveStock() because the seed runs
+    // outside the app and must not depend on its module aliases. It still does
+    // both halves, which is the rule that matters.
     for (const variant of product.variants) {
-      await db.productVariant.upsert({
+      const existing = await db.productVariant.findUnique({
+        where: { sku: variant.sku },
+        select: { id: true },
+      });
+
+      const savedVariant = await db.productVariant.upsert({
         where: { sku: variant.sku },
         update: {
           size: variant.size,
@@ -440,9 +455,28 @@ async function main(): Promise<void> {
           size: variant.size,
           sku: variant.sku,
           price: variant.price,
-          stockQty: variant.stockQty,
+          stockQty: 0,
         },
+        select: { id: true },
       });
+
+      if (!existing && variant.stockQty !== 0) {
+        await db.$transaction([
+          db.productVariant.update({
+            where: { id: savedVariant.id },
+            data: { stockQty: variant.stockQty },
+          }),
+          db.stockMovement.create({
+            data: {
+              variantId: savedVariant.id,
+              delta: variant.stockQty,
+              balanceAfter: variant.stockQty,
+              reason: "OPENING_BALANCE",
+              note: "Seeded.",
+            },
+          }),
+        ]);
+      }
     }
 
     // Attribute links.

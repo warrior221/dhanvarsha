@@ -1,6 +1,7 @@
 import type { Prisma } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import { moveStock, setStockTo } from "@/lib/queries/stock";
 import { destroyImage } from "@/lib/imagekit";
 import { toPaise } from "@/lib/format";
 import type { ProductFormInput } from "@/lib/validations/product";
@@ -262,7 +263,11 @@ export async function getAdminProduct(id: string): Promise<AdminProductDetail | 
 /* Writes                                                              */
 /* ------------------------------------------------------------------ */
 
-export async function createProduct(input: ProductFormInput): Promise<string> {
+export async function createProduct(
+  input: ProductFormInput,
+  /** Whoever is signed in, recorded against the stock this creates. */
+  adminId: string,
+): Promise<string> {
   await assertUnique({ slug: input.slug, sku: input.sku });
   await assertVariantSkusFree(input.variants.map((v) => v.sku));
 
@@ -303,15 +308,34 @@ export async function createProduct(input: ProductFormInput): Promise<string> {
       })),
     });
 
-    await tx.productVariant.createMany({
+    // Created at zero, then the opening stock is ADDED as a movement rather
+    // than written straight into stockQty. Every piece of stock this shop has
+    // must be explainable from the ledger, including the first.
+    const madeVariants = await tx.productVariant.createManyAndReturn({
       data: input.variants.map((variant) => ({
         productId: created.id,
         size: variant.size,
         sku: variant.sku,
         price: emptyToNull(variant.price),
-        stockQty: variant.stockQty,
+        stockQty: 0,
       })),
+      select: { id: true, sku: true },
     });
+
+    const openingBySku = new Map(input.variants.map((v) => [v.sku, v.stockQty]));
+
+    for (const variant of madeVariants) {
+      const opening = openingBySku.get(variant.sku) ?? 0;
+      if (opening === 0) continue;
+
+      await moveStock(tx, {
+        variantId: variant.id,
+        delta: opening,
+        reason: "OPENING_BALANCE",
+        createdById: adminId,
+        note: "Entered with the product.",
+      });
+    }
 
     if (input.attributeValueIds.length > 0) {
       await tx.productAttributeValue.createMany({
@@ -329,7 +353,12 @@ export async function createProduct(input: ProductFormInput): Promise<string> {
   return product.id;
 }
 
-export async function updateProduct(id: string, input: ProductFormInput): Promise<void> {
+export async function updateProduct(
+  id: string,
+  input: ProductFormInput,
+  /** Whoever is signed in, recorded against any stock this changes. */
+  adminId: string,
+): Promise<void> {
   const existing = await db.product.findUnique({
     where: { id },
     select: {
@@ -428,25 +457,46 @@ export async function updateProduct(id: string, input: ProductFormInput): Promis
 
     for (const variant of input.variants) {
       if (variant.id) {
+        // Everything EXCEPT stock. A count typed into the product form is
+        // still a stock change and still owes the ledger a reason, so it goes
+        // through setStockTo rather than being written here.
         await tx.productVariant.update({
           where: { id: variant.id },
           data: {
             size: variant.size,
             sku: variant.sku,
             price: emptyToNull(variant.price),
-            stockQty: variant.stockQty,
           },
         });
+
+        await setStockTo(tx, {
+          variantId: variant.id,
+          newQty: variant.stockQty,
+          reason: "ADJUSTMENT",
+          note: "Changed on the product form.",
+          createdById: adminId,
+        });
       } else {
-        await tx.productVariant.create({
+        const made = await tx.productVariant.create({
           data: {
             productId: id,
             size: variant.size,
             sku: variant.sku,
             price: emptyToNull(variant.price),
-            stockQty: variant.stockQty,
+            stockQty: 0,
           },
+          select: { id: true },
         });
+
+        if (variant.stockQty !== 0) {
+          await moveStock(tx, {
+            variantId: made.id,
+            delta: variant.stockQty,
+            reason: "OPENING_BALANCE",
+            createdById: adminId,
+            note: "Size added to an existing product.",
+          });
+        }
       }
     }
 

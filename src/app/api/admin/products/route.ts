@@ -29,14 +29,14 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAdmin();
+    const admin = await requireAdmin();
 
     const body: unknown = await request.json();
     // Parsed, then handed to a function that builds the insert field by field.
     // The raw body never reaches Prisma (spec 8.1).
     const input = productFormSchema.parse(body);
 
-    const id = await createProduct(input);
+    const id = await createProduct(input, admin.id);
 
     return apiSuccess({ id }, 201);
   } catch (error) {

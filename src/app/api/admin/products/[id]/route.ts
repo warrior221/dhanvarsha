@@ -18,14 +18,14 @@ export async function PUT(
   context: RouteContext<"/api/admin/products/[id]">,
 ) {
   try {
-    await requireAdmin();
+    const admin = await requireAdmin();
 
     // params is a Promise in Next.js 16.
     const { id } = await context.params;
     const body: unknown = await request.json();
     const input = productFormSchema.parse(body);
 
-    await updateProduct(id, input);
+    await updateProduct(id, input, admin.id);
 
     return apiSuccess({ id });
   } catch (error) {

@@ -76,6 +76,7 @@ model User {
   reviews         Review[]
   shopReviews     ShopReview[]
   statusChanges   OrderStatusHistory[]
+  stockMovements  StockMovement[]
   sessions        Session[]
   adminMfa        AdminMfa?
   setupTokens     SetupToken[]
@@ -229,6 +230,7 @@ model ProductVariant {
   stockQty   Int         @default(0)
   cartItems  CartItem[]
   orderItems OrderItem[]
+  movements  StockMovement[]
 
   @@index([productId])
 }
@@ -292,6 +294,7 @@ model Order {
   items          OrderItem[]
   payment        Payment?
   statusHistory  OrderStatusHistory[]
+  stockMovements StockMovement[]
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
 
@@ -547,4 +550,71 @@ model ShopReview {
   updatedAt   DateTime         @updatedAt
 
   @@index([isPublished, reviewedAt])
+}
+
+/// Why stock moved. Every movement has exactly one reason.
+enum StockReason {
+  /// Already on the shelf when the system started counting.
+  OPENING_BALANCE
+  /// Bought in from a weaver or seller. (Phase 2.)
+  PURCHASE
+  /// Sold through the website.
+  ONLINE_SALE
+  /// An online order cancelled before dispatch, putting the piece back.
+  ONLINE_CANCEL
+  /// An online order returned, putting the piece back.
+  ONLINE_RETURN
+  /// Scanned out at the counter when the piece left the shop. (Phase 4.)
+  SHOP_CHECKOUT
+  /// An admin undoing a counter scan. Points at the original movement.
+  SHOP_CHECKOUT_UNDO
+  /// A correction applied after a shelf count. (Phase 5.)
+  STOCKTAKE
+  /// Damaged, spoiled or otherwise written off.
+  DAMAGE
+  /// Anything else. Always with a note.
+  ADJUSTMENT
+}
+
+/// A single change to one variant's stock.
+///
+/// THE SHOP'S PERMANENT IN-AND-OUT HISTORY. `ProductVariant.stockQty` is a
+/// cached balance and must always equal the sum of that variant's deltas. A
+/// bare number cannot answer "where did this saree go?", which is the whole
+/// reason this table exists.
+///
+/// Rows are never edited or deleted. A mistake is corrected by a NEW movement
+/// pointing at the original through `reversesMovement`.
+///
+/// `purchaseId` and `stocktakeId` from the plan are deliberately absent until
+/// Purchase (Phase 2) and Stocktake (Phase 5) exist — a nullable string with
+/// no foreign key behind it is worse than no column at all.
+model StockMovement {
+  id           String         @id @default(cuid())
+  variantId    String
+  variant      ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  /// Signed: positive came in, negative went out. Never zero.
+  delta        Int
+  /// The variant's stockQty immediately after this movement, so the history
+  /// reads without re-adding every row before it.
+  balanceAfter Int
+  reason       StockReason
+  /// Set when the movement came from an online order.
+  orderId      String?
+  order        Order?         @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  /// Set on a correcting movement, pointing at the one it reverses. Unique, so
+  /// the same movement cannot be reversed twice.
+  reversesMovementId String?        @unique
+  reversesMovement   StockMovement? @relation("StockReversal", fields: [reversesMovementId], references: [id], onDelete: SetNull)
+  reversedBy         StockMovement? @relation("StockReversal")
+  /// Required for DAMAGE and ADJUSTMENT, where the number alone explains
+  /// nothing. Enforced in code.
+  note         String?
+  /// Null when the shop itself moved the stock — an order, or a webhook.
+  createdById  String?
+  createdBy    User?          @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt    DateTime       @default(now())
+
+  @@index([variantId, createdAt])
+  @@index([reason, createdAt])
 }

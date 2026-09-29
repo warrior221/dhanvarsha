@@ -2,6 +2,7 @@ import { OrderStatus, PaymentMethod, Prisma } from "@/generated/prisma";
 import { paiseToDecimal } from "@/lib/cart";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import { moveStock } from "@/lib/queries/stock";
 import { formatInr, toPaise } from "@/lib/format";
 import { generateOrderNumber } from "@/lib/order-number";
 import { getTaxSettings } from "@/lib/queries/settings";
@@ -403,23 +404,6 @@ async function createOrderTransaction(
       };
     });
 
-    // Take the stock. Conditional on there being enough, so a race loses
-    // rather than overselling.
-    for (const item of lines) {
-      const taken = await tx.productVariant.updateMany({
-        where: { id: item.variant.id, stockQty: { gte: item.quantity } },
-        data: { stockQty: { decrement: item.quantity } },
-      });
-
-      if (taken.count === 0) {
-        throw new AppError(
-          "INSUFFICIENT_STOCK",
-          `"${item.variant.product.name}"${item.variant.size ? ` (${item.variant.size})` : ""} just sold out. Please adjust your bag and try again.`,
-          409,
-        );
-      }
-    }
-
     // Pure: no database round trip inside the transaction.
     const shipping = resolveShipping(
       config.shippingRules,
@@ -454,8 +438,32 @@ async function createOrderTransaction(
           },
         },
       },
-      select: { orderNumber: true, total: true },
+      select: { id: true, orderNumber: true, total: true },
     });
+
+    // Take the stock AFTER the order exists, so every movement can name the
+    // order that caused it. Order matters only for that link: if any piece
+    // has sold out the whole transaction rolls back and no order survives.
+    //
+    // moveStock's update is conditional on there being enough, so two orders
+    // racing for the last piece cannot both win.
+    for (const item of lines) {
+      try {
+        await moveStock(tx, {
+          variantId: item.variant.id,
+          delta: -item.quantity,
+          reason: "ONLINE_SALE",
+          orderId: order.id,
+          createdById: userId,
+        });
+      } catch {
+        throw new AppError(
+          "INSUFFICIENT_STOCK",
+          `"${item.variant.product.name}"${item.variant.size ? ` (${item.variant.size})` : ""} just sold out. Please adjust your bag and try again.`,
+          409,
+        );
+      }
+    }
 
     // The bag has become an order.
     await tx.cartItem.deleteMany({ where: { cartId: cart.id } });

@@ -9,7 +9,13 @@ import {
   onOrderDelivered,
   onOrderShipped,
 } from "@/lib/notifications/order-events";
-import { canTransition, requiresTracking, restoresStock } from "@/lib/order-status";
+import {
+  ORDER_STATUS,
+  canTransition,
+  requiresTracking,
+  restoresStock,
+} from "@/lib/order-status";
+import { moveStock } from "@/lib/queries/stock";
 
 /**
  * Admin order management.
@@ -390,12 +396,20 @@ export async function transitionOrder(input: TransitionInput): Promise<void> {
       },
     });
 
-    // Cancelling puts the goods back on the shelf.
+    // Cancelling puts the goods back on the shelf, and says so in the ledger.
     if (restoresStock(input.to)) {
+      // Derived rather than hardcoded, so the day RETURNED also restores
+      // stock the history records why, not just that it went up.
+      const reason =
+        input.to === ORDER_STATUS.RETURNED ? "ONLINE_RETURN" : "ONLINE_CANCEL";
+
       for (const item of order.items) {
-        await tx.productVariant.update({
-          where: { id: item.variantId },
-          data: { stockQty: { increment: item.quantity } },
+        await moveStock(tx, {
+          variantId: item.variantId,
+          delta: item.quantity,
+          reason,
+          orderId: order.id,
+          createdById: input.adminId,
         });
       }
     }
