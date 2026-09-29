@@ -13,7 +13,8 @@ export const metadata: Metadata = {
  *
  * ADMIN ONLY. A supplier's name, number and what they are paid are commercial
  * information of the same class as cost price, and must never reach a customer
- * route or, when Phase 3 lands, a STAFF one.
+ * route. There is no staff role to worry about: the owner has said the shop will
+ * only ever be run from this one account.
  */
 export default async function AdminSuppliersPage() {
   await requireAdminPage();

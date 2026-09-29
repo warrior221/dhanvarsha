@@ -78,6 +78,7 @@ model User {
   statusChanges   OrderStatusHistory[]
   stockMovements  StockMovement[]
   purchases       Purchase[]
+  stocktakes      Stocktake[]
   supplierPhotoViews SupplierPhotoView[]
   sessions        Session[]
   adminMfa        AdminMfa?
@@ -239,6 +240,7 @@ model ProductVariant {
   orderItems OrderItem[]
   movements  StockMovement[]
   purchaseItems PurchaseItem[]
+  stocktakeLines StocktakeLine[]
   /// Code 128, printed on the tag and scanned at the counter. Unique across
   /// the shop. Null only for variants created before barcodes existed.
   barcode    String?     @unique
@@ -618,6 +620,10 @@ model StockMovement {
   reversesMovementId String?        @unique
   reversesMovement   StockMovement? @relation("StockReversal", fields: [reversesMovementId], references: [id], onDelete: SetNull)
   reversedBy         StockMovement? @relation("StockReversal")
+  /// Set when a shelf count produced this correction. Unique, so the same
+  /// difference cannot be corrected twice.
+  stocktakeLineId    String?        @unique
+  stocktakeLine      StocktakeLine? @relation(fields: [stocktakeLineId], references: [id], onDelete: SetNull)
   /// Required for DAMAGE and ADJUSTMENT, where the number alone explains
   /// nothing. Enforced in code.
   note         String?
@@ -730,5 +736,87 @@ model PurchaseItem {
   unitCost   Decimal        @db.Decimal(10, 2)
 
   @@index([purchaseId])
+  @@index([variantId])
+}
+
+/// Where a shelf count stands.
+enum StocktakeStatus {
+  /// Scanning the shelves. Counts may still change.
+  OPEN
+  /// Scanning finished and the expected figures are frozen. The report can be
+  /// read and corrections applied.
+  COUNTED
+  /// Every difference has been either applied or left alone. Read-only.
+  CLOSED
+  /// Given up on. Nothing was applied and nothing ever will be.
+  ABANDONED
+}
+
+/// One shelf count: scan everything on the shelves, then compare.
+///
+/// The safety net for pieces that left the shop without being scanned out. The
+/// website goes on believing those are in stock and may sell them online a
+/// second time; a count is the only thing that finds them.
+///
+/// NOTHING IS EVER APPLIED AUTOMATICALLY. A count produces a report; the owner
+/// decides line by line what to correct, and each correction is an ordinary
+/// STOCKTAKE movement in the same ledger as everything else.
+model Stocktake {
+  id          String          @id @default(cuid())
+  status      StocktakeStatus @default(OPEN)
+  /// What this count was for, in the owner's own words.
+  note        String?
+  lines       StocktakeLine[]
+  startedById String?
+  startedBy   User?           @relation(fields: [startedById], references: [id], onDelete: SetNull)
+  startedAt   DateTime        @default(now())
+  /// When scanning stopped and `StocktakeLine.expectedQty` was frozen.
+  countedAt   DateTime?
+  closedAt    DateTime?
+
+  @@index([status, startedAt])
+  @@index([startedAt])
+}
+
+/// One piece in a count: how many were found, how many were expected.
+///
+/// Created as the shelves are scanned, and once more at the end for everything
+/// the system expected but nobody scanned — those are the missing pieces, and
+/// they are the entire point of counting.
+///
+/// `expectedQty` is FROZEN when scanning stops, not read at the moment a
+/// correction is applied. Time passes between counting and correcting, and an
+/// online order in that gap would otherwise be silently undone. Applying
+/// checks the live figure against this one and refuses the line if it has
+/// moved, rather than guessing.
+model StocktakeLine {
+  id          String         @id @default(cuid())
+  stocktakeId String
+  stocktake   Stocktake      @relation(fields: [stocktakeId], references: [id], onDelete: Cascade)
+  /// Null only when a scanned tag belonged to no piece in the system.
+  variantId   String?
+  variant     ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  /// The tag as scanned, kept even when it matched nothing so an unreadable or
+  /// foreign label can still be looked at afterwards. Null on a line raised at
+  /// the end for a piece nobody scanned.
+  scannedCode String?
+  /// How many were actually found on the shelf. One per scan of the tag.
+  countedQty  Int            @default(0)
+  /// What the system believed was in stock when scanning stopped. Null while
+  /// the count is still open.
+  expectedQty Int?
+  /// Set when the owner decides this difference needs no correction.
+  skippedAt   DateTime?
+  /// The correction, if one was applied. Null means nothing was changed.
+  appliedMovement StockMovement?
+  firstSeenAt DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  /// One line per piece per count, so scanning the same tag again adds to the
+  /// count instead of making a second row.
+  @@unique([stocktakeId, variantId])
+  /// The same for a tag that matched nothing.
+  @@unique([stocktakeId, scannedCode])
+  @@index([stocktakeId])
   @@index([variantId])
 }

@@ -335,12 +335,78 @@ built and none should be. New purchases use `supplierId` from the start.
 **Labels remain blocked on open question 1** — the printer model and label
 size.
 
+**Phase 3 — Staff role: CANCELLED** (30 September 2026). The owner will only
+ever operate the shop from the admin account. No `STAFF` role, no `/staff`
+routes, no `requireStaffOrAdmin()`, no PIN. See §11.
+
+**Phase 4 — Scan out: DONE** (30 September 2026).
+`src/lib/queries/scan-out.ts`, `src/app/api/admin/scan-out/route.ts`,
+`src/components/admin/scan-out-desk.tsx`, `/admin/scan-out`. Admin-only, since
+there are no staff. The box takes focus back after every scan, and codes are
+normalised, so a lowercase or padded scan still finds the tag. Undo writes a new
+`SHOP_CHECKOUT_UNDO` pointing at the original through the unique
+`reversesMovementId`, so the database refuses a second undo and the original
+movement is never edited or deleted.
+
+Verified: the race the plan asks about — buying the last piece online while
+scanning it at the counter — leaves exactly one winner and stock at zero, never
+negative. Unknown tags and empty stock are both refused.
+
+**Phase 5 — Stock-take: DONE** (30 September 2026).
+`Stocktake` + `StocktakeLine` + `StocktakeStatus`, `StockMovement.stocktakeLineId`,
+`src/lib/queries/stocktake.ts`, `src/app/api/admin/stock-take/route.ts`,
+`/admin/stock-take` and `/admin/stock-take/[id]`, with
+`src/components/admin/count-desk.tsx` and `stocktake-report.tsx`.
+
+How it behaves, and why:
+
+- A count is OPEN while scanning, COUNTED once scanning stops, CLOSED once every
+  difference has been either corrected or deliberately left alone, or ABANDONED.
+- Scanning the same tag adds one to that piece's count, because every piece of a
+  size carries the same tag. The number can also be typed, for a tag scanned
+  once too often.
+- A tag matching nothing is RECORDED, not refused. On a shelf count an
+  unreadable or foreign label is information.
+- **Nothing is applied by counting.** Finishing freezes `expectedQty` and
+  produces the report; each correction is a separate deliberate press.
+- `expectedQty` is frozen, not re-read when a correction is applied. If stock has
+  moved in between — something sold — the line is REFUSED (`STOCK_MOVED`) and the
+  screen says to count that piece again. Applying an old figure over a real sale
+  is the one way this feature could lose a saree.
+- Corrections are ordinary `STOCKTAKE` movements carrying an automatic note
+  (`Shelf count 30 Sept 2026: expected 6, found 5.`), so the ledger explains
+  itself without opening this screen again.
+- `stocktakeLineId` is unique, so the same difference cannot be corrected twice.
+- Only one count may be open at a time. Enforced in code, deliberately not as a
+  partial unique index: Prisma cannot express one, and it would then appear as
+  something to drop the next time a migration is generated from the schema.
+- Finishing raises a line for every piece the system expects that nobody
+  scanned — those are the missing ones. **A count therefore has to cover the
+  whole shop**; the screen says so and shows how many pieces are still
+  unaccounted for before asking.
+- Closing is refused while any difference is undecided, so a count cannot be
+  filed away with a missing saree nobody looked at.
+
+Verified both directions on the real database: an under-counted piece reported
+missing and corrected down; an over-counted one reported extra and corrected up;
+a correction after stock moved refused; correcting twice refused; closing with
+differences left refused; a lowercase padded scan landing on the same line; an
+unknown tag listed on its own. The ledger reconciled 10/10 afterwards.
+
+**Phone-camera scanning is NOT built** (the plan asks for it in §13). It would
+be useless before labels exist: there is nothing printed on the shelves for a
+camera to read, and a scanning library cannot be honestly tested without a
+camera and a printed tag. Build it with labels, once open question 1 is
+answered — as one component swapped into the same box on the counting screen.
+
 ## 4. Open questions — ask the owner before the phase they affect
 
 1. **Label printer model and label size**, before building labels (Phase 2).
 2. **Pieces with zero stock leaving the shop grid**: confirm before changing
    the current behaviour (Phase 2).
-3. **Staff logins** (Phase 3). Ask two things. Do several staff share one
+3. ~~**Staff logins** (Phase 3).~~ **ANSWERED 30 September 2026: there will
+   never be staff accounts.** Phase 3 is cancelled. The original question,
+   kept for the record: ask two things. Do several staff share one
    counter computer? Do all staff have an email address? If they share a
    computer, scans would be attributed to whoever signed in that morning, so
    offer a quick 4-digit PIN to confirm each scanning session. If some staff
@@ -409,9 +475,9 @@ no longer matter.
 |---|---|---|
 | 1 | Stock ledger | everything else |
 | 2 | Suppliers, purchases, barcodes, labels, "show online" | entering real products |
-| 3 | Staff role | staff scanning at the counter |
-| 4 | Shop checkout (scan out) | stock leaving when pieces are sold in the shop |
-| 5 | Stock-take | catching missed scans, monthly audit |
+| 3 | Staff role | **CANCELLED** — the owner will never add staff accounts |
+| 4 | Shop checkout (scan out) | **DONE** — stock leaves when a piece is sold in the shop |
+| 5 | Stock-take | **DONE** — catches missed scans, monthly audit |
 
 Phase 2 is what lets the owner start entering real stock, which also clears the
 main handover's biggest blocker (placeholder products). **Do not let the owner
@@ -645,9 +711,19 @@ with the ledger (Phase 1) and with scan-out (Phase 4).
 
 ---
 
-## 11. Phase 3 — Staff role
+## 11. Phase 3 — Staff role: CANCELLED
 
-**Ask open question 3 before starting this phase.**
+**Do not build this.** Asked on 30 September 2026, the owner answered: *"no need
+to setup for staff only admin will operate forever no staff."* Scanning at the
+counter is admin-only, and open question 3 is withdrawn.
+
+This is not a deferral. Building it later would add the one thing the shop
+currently cannot get wrong: a second role that might see cost prices, supplier
+names or weaver photographs. If the owner ever does hire, read the section below
+as the design that was intended, and check every one of its guards again before
+writing a line of it.
+
+The rest of this section is kept only as that record.
 
 - `Role` gains `STAFF`.
 - STAFF can open the scan-out screen (Phase 4), look up a piece by scan or
