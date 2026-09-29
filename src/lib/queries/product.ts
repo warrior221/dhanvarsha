@@ -9,6 +9,38 @@ import type { Prisma } from "@/generated/prisma";
  * to remember to opt out (spec 1.3 / 8.2).
  */
 
+/**
+ * What makes a product visible to a shopper.
+ *
+ * Active, AND priced. A piece is entered when it arrives from the weaver and
+ * priced later, so between those two moments it sits in the database and no
+ * customer sees it. Pricing it is what puts it on the shop.
+ *
+ * Every customer-facing query spreads this. Writing the two conditions out by
+ * hand in six places is how one of them quietly ends up missing.
+ */
+export const PUBLIC_PRODUCT_WHERE = {
+  isActive: true,
+  mrp: { not: null },
+  sellingPrice: { not: null },
+} satisfies Prisma.ProductWhereInput;
+
+/**
+ * Reads a price that PUBLIC_PRODUCT_WHERE guarantees is there.
+ *
+ * A null here means a customer-facing query dropped that filter — a bug that
+ * would otherwise render "₹NaN" to a shopper, or worse, offer a piece with no
+ * price. Failing loudly is the lesser harm.
+ */
+function requiredPrice(value: { toString(): string } | null, what: string): string {
+  if (value === null) {
+    throw new Error(
+      `${what} reached a customer view with no price. A query is missing PUBLIC_PRODUCT_WHERE.`,
+    );
+  }
+  return value.toString();
+}
+
 /** Everything the product detail page needs. */
 export const publicProductSelect = {
   id: true,
@@ -72,6 +104,8 @@ export const productCardSelect = {
  */
 export const wishlistProductSelect = {
   ...productCardSelect,
+  // Needed to tell a saved piece that is still on sale from one that is not.
+  isActive: true,
   variants: { select: { id: true, size: true, stockQty: true } },
 } as const satisfies Prisma.ProductSelect;
 
@@ -79,15 +113,39 @@ type RawWishlistProduct = Prisma.ProductGetPayload<{
   select: typeof wishlistProductSelect;
 }>;
 
-export type WishlistProductView = ProductCardView & {
+/**
+ * A saved piece, WHICH MAY NO LONGER BE ON SALE.
+ *
+ * Nothing ever leaves a wishlist on its own. A piece whose price was cleared,
+ * or that was deactivated, stays saved and is shown as unavailable — someone
+ * saved it on purpose, and silently emptying their list is worse than telling
+ * them it has gone. So the price here is nullable where the shop grid's is not.
+ */
+export type WishlistProductView = Omit<ProductCardView, "sellingPrice"> & {
+  sellingPrice: string | null;
+  /** False when the piece has no price or has been deactivated. */
+  isAvailable: boolean;
   variants: { id: string; size: string | null; stockQty: number }[];
 };
 
 export function toWishlistProductView(
   product: RawWishlistProduct,
 ): WishlistProductView {
+  // Built field by field rather than through toProductCardView, which asserts
+  // a price. Here a missing price is expected, not a bug: it means the piece
+  // has been taken off sale since it was saved.
   return {
-    ...toProductCardView(product),
+    id: product.id,
+    sku: product.sku,
+    name: product.name,
+    slug: product.slug,
+    mrp: product.mrp?.toString() ?? null,
+    sellingPrice: product.sellingPrice?.toString() ?? null,
+    isAvailable: product.sellingPrice !== null && product.isActive,
+    isReadymade: product.isReadymade,
+    category: product.category,
+    image: product.images[0] ?? null,
+    totalStock: product.variants.reduce((sum, v) => sum + v.stockQty, 0),
     variants: [...product.variants].sort(compareVariants),
   };
 }
@@ -128,7 +186,8 @@ export type ProductView = {
   name: string;
   slug: string;
   description: string;
-  mrp: string;
+  /** Null when the piece has no "was" price to strike through. */
+  mrp: string | null;
   sellingPrice: string;
   isReadymade: boolean;
   careInstructions: string | null;
@@ -150,7 +209,8 @@ export type ProductCardView = {
   sku: string;
   name: string;
   slug: string;
-  mrp: string;
+  /** Null when the piece has no "was" price to strike through. */
+  mrp: string | null;
   sellingPrice: string;
   isReadymade: boolean;
   category: { name: string; slug: string };
@@ -195,8 +255,8 @@ export function toProductView(product: RawProduct): ProductView {
     name: product.name,
     slug: product.slug,
     description: product.description,
-    mrp: product.mrp.toString(),
-    sellingPrice: product.sellingPrice.toString(),
+    mrp: product.mrp?.toString() ?? null,
+    sellingPrice: requiredPrice(product.sellingPrice, product.slug),
     isReadymade: product.isReadymade,
     careInstructions: product.careInstructions,
     silkMarkNumber: product.silkMarkNumber,
@@ -205,7 +265,7 @@ export function toProductView(product: RawProduct): ProductView {
     variants: [...product.variants].sort(compareVariants).map((variant) => ({
       id: variant.id,
       size: variant.size,
-      price: variant.price.toString(),
+      price: requiredPrice(variant.price, `${product.slug} variant ${variant.id}`),
       stockQty: variant.stockQty,
     })),
     attributes: product.attributes.map((link) => ({
@@ -223,8 +283,8 @@ export function toProductCardView(product: RawProductCard): ProductCardView {
     sku: product.sku,
     name: product.name,
     slug: product.slug,
-    mrp: product.mrp.toString(),
-    sellingPrice: product.sellingPrice.toString(),
+    mrp: product.mrp?.toString() ?? null,
+    sellingPrice: requiredPrice(product.sellingPrice, product.slug),
     isReadymade: product.isReadymade,
     category: product.category,
     image: product.images[0] ?? null,

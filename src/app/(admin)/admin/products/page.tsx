@@ -16,7 +16,10 @@ import {
 import { requireAdminPage } from "@/lib/auth-guards";
 import { db } from "@/lib/db";
 import { formatInr } from "@/lib/format";
-import { listAdminProducts } from "@/lib/queries/admin-products";
+import {
+  countUnpricedProducts,
+  listAdminProducts,
+} from "@/lib/queries/admin-products";
 import { AdminProductFilters } from "@/components/admin/product-filters";
 
 export const metadata: Metadata = {
@@ -35,7 +38,7 @@ export default async function AdminProductsPage(props: PageProps<"/admin/product
     return Array.isArray(value) ? (value[0] ?? null) : (value ?? null);
   };
 
-  const [categories, list] = await Promise.all([
+  const [categories, list, unpricedCount] = await Promise.all([
     db.category.findMany({
       orderBy: { position: "asc" },
       select: { id: true, name: true },
@@ -45,8 +48,12 @@ export default async function AdminProductsPage(props: PageProps<"/admin/product
       categoryId: first("categoryId"),
       status: first("status"),
       soldOutOnly: first("soldOut") === "1",
+      // Priced pieces only. The unpriced ones have their own list — with ten
+      // thousand to tag gradually, they would otherwise bury the catalogue.
+      pricing: "priced",
       page: Number(first("page") ?? "1") || 1,
     }),
+    countUnpricedProducts(),
   ]);
 
   return (
@@ -55,7 +62,18 @@ export default async function AdminProductsPage(props: PageProps<"/admin/product
         <div>
           <h1 className="text-2xl font-semibold">Products</h1>
           <p className="text-sm text-muted-foreground">
-            {list.total} {list.total === 1 ? "product" : "products"}
+            {list.total} on the shop
+            {unpricedCount > 0 ? (
+              <>
+                {" · "}
+                <Link
+                  href="/admin/products/unpriced"
+                  className="font-medium text-amber-700 underline underline-offset-4 dark:text-amber-500"
+                >
+                  {unpricedCount} waiting to be priced
+                </Link>
+              </>
+            ) : null}
           </p>
         </div>
 
@@ -126,10 +144,19 @@ export default async function AdminProductsPage(props: PageProps<"/admin/product
                   </TableCell>
 
                   <TableCell className="text-right tabular-nums text-muted-foreground">
-                    {formatInr(row.mrp)}
+                    {row.mrp ? formatInr(row.mrp) : "—"}
                   </TableCell>
                   <TableCell className="text-right font-medium tabular-nums">
-                    {formatInr(row.sellingPrice)}
+                    {/* No price means the piece is in stock but not on the
+                        shop. Said plainly, because it is the admin's cue to
+                        act rather than a missing value. */}
+                    {row.sellingPrice ? (
+                      formatInr(row.sellingPrice)
+                    ) : (
+                      <span className="text-xs font-normal text-amber-700 dark:text-amber-500">
+                        Not priced
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">
                     {row.costPrice ? formatInr(row.costPrice) : "—"}

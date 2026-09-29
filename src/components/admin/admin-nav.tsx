@@ -7,7 +7,8 @@ import { cn } from "@/lib/utils";
 const LINKS = [
   { href: "/admin", label: "Dashboard", exact: true },
   { href: "/admin/orders", label: "Orders" },
-  { href: "/admin/products", label: "Products" },
+  { href: "/admin/products", label: "Products", exact: true },
+  { href: "/admin/products/unpriced", label: "Unpriced", badge: true },
   { href: "/admin/attributes", label: "Attributes" },
   { href: "/admin/inventory", label: "Inventory" },
   { href: "/admin/reports", label: "Reports" },
@@ -16,7 +17,12 @@ const LINKS = [
   { href: "/admin/security", label: "Security" },
 ] as const;
 
-export function AdminNav() {
+/**
+ * @param unpricedCount pieces entered but not yet priced. Shown on the
+ * Unpriced link so stock the shop owns but cannot sell stays visible rather
+ * than waiting silently.
+ */
+export function AdminNav({ unpricedCount = 0 }: { unpricedCount?: number }) {
   const pathname = usePathname();
 
   return (
@@ -43,6 +49,11 @@ export function AdminNav() {
             )}
           >
             {link.label}
+            {"badge" in link && link.badge && unpricedCount > 0 ? (
+              <span className="ml-1.5 rounded-full bg-amber-600 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-white">
+                {unpricedCount}
+              </span>
+            ) : null}
           </Link>
         );
       })}

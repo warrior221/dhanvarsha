@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { db } from "@/lib/db";
 import { siteUrl, absoluteUrl } from "@/lib/site";
+import { PUBLIC_PRODUCT_WHERE } from "@/lib/queries/product";
 
 /**
  * The map Google reads to find the catalogue.
@@ -13,7 +14,7 @@ export const revalidate = 3600;
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [products, categories] = await Promise.all([
     db.product.findMany({
-      where: { isActive: true },
+      where: PUBLIC_PRODUCT_WHERE,
       orderBy: { updatedAt: "desc" },
       select: {
         slug: true,
@@ -42,6 +43,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "monthly",
       priority: 0.3,
     },
+
+    // Policy pages. Low priority but indexed on purpose: a shopper deciding
+    // whether to trust a shop they have not heard of often searches for them,
+    // and a payment provider checking the site expects to find them.
+    ...["/shipping", "/refunds", "/terms", "/privacy"].map((path) => ({
+      url: siteUrl(path),
+      changeFrequency: "yearly" as const,
+      priority: 0.2,
+    })),
 
     // Browse pages. Real pages with their own listings, so worth indexing,
     // but below the products themselves — a shopper searching for "green

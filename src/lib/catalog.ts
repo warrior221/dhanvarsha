@@ -1,4 +1,5 @@
 import type { AttributeInputType, Prisma } from "@/generated/prisma";
+import { PUBLIC_PRODUCT_WHERE } from "@/lib/queries/product";
 
 /**
  * Catalog types and pure functions — NO database import.
@@ -129,7 +130,7 @@ export function searchTerms(q: string | null): string[] {
 }
 
 export function buildProductWhere(params: CatalogParams): Prisma.ProductWhereInput {
-  const and: Prisma.ProductWhereInput[] = [{ isActive: true }];
+  const and: Prisma.ProductWhereInput[] = [PUBLIC_PRODUCT_WHERE];
 
   if (params.categorySlug) {
     and.push({ category: { slug: params.categorySlug } });

@@ -5,7 +5,9 @@ import { ReviewMarquee } from "@/components/shop/review-marquee";
 import { EmptyState } from "@/components/shared/states";
 import { Button } from "@/components/ui/button";
 import { db } from "@/lib/db";
-import { productCardSelect, toProductCardView } from "@/lib/queries/product";
+import { productCardSelect, toProductCardView,
+  PUBLIC_PRODUCT_WHERE,
+} from "@/lib/queries/product";
 import { getPublishedShopReviews } from "@/lib/queries/shop-reviews";
 
 export default async function HomePage() {
@@ -18,7 +20,7 @@ export default async function HomePage() {
         slug: true,
         imageUrl: true,
         products: {
-          where: { isActive: true },
+          where: PUBLIC_PRODUCT_WHERE,
           orderBy: { createdAt: "desc" },
           take: 1,
           select: { images: { orderBy: { position: "asc" }, take: 1, select: { url: true } } },
@@ -26,7 +28,7 @@ export default async function HomePage() {
       },
     }),
     db.product.findMany({
-      where: { isActive: true },
+      where: PUBLIC_PRODUCT_WHERE,
       orderBy: { createdAt: "desc" },
       take: 8,
       select: productCardSelect,

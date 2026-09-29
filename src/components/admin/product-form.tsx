@@ -85,6 +85,17 @@ export function ProductForm({
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  /**
+   * Local only, never submitted.
+   *
+   * The discount is a way of ARRIVING at the selling price, not a third thing
+   * to store — the shop recomputes it from the two prices every time it is
+   * shown, so a stored copy could only ever drift out of step with them.
+   */
+  const [discount, setDiscount] = useState(
+    () => discountFromSelling(initial?.mrp ?? "", initial?.sellingPrice ?? "") ?? "",
+  );
+
   const isEdit = Boolean(initial?.id);
 
   function set<K extends keyof ProductFormValues>(key: K, value: ProductFormValues[K]) {
@@ -276,14 +287,51 @@ export function ProductForm({
         title="Pricing"
         description="Cost price is never shown to customers — it is stored in a separate admin-only table."
       >
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Field label="MRP (₹)" error={fieldErrors.mrp} htmlFor="mrp">
+        <div className="grid gap-4 sm:grid-cols-4">
+          <Field
+            label="MRP (₹)"
+            error={fieldErrors.mrp}
+            htmlFor="mrp"
+            hint="Leave MRP and selling price both blank to keep this piece off the shop. It stays in stock and in your inventory until you price it."
+          >
             <Input
               id="mrp"
               inputMode="decimal"
               value={values.mrp}
-              onChange={(event) => set("mrp", event.target.value)}
+              onChange={(event) => {
+                const mrp = event.target.value;
+                set("mrp", mrp);
+
+                // Keep whichever of the other two the owner last worked from.
+                // Discount is the one they usually think in, so it wins.
+                const fromDiscount = sellingFromDiscount(mrp, discount);
+                if (discount.trim() !== "" && fromDiscount !== null) {
+                  set("sellingPrice", fromDiscount);
+                } else {
+                  setDiscount(discountFromSelling(mrp, values.sellingPrice) ?? "");
+                }
+              }}
               placeholder="12999"
+            />
+          </Field>
+
+          <Field
+            label="Discount (%)"
+            htmlFor="discount"
+            hint="Type this or the selling price — the other fills itself in. 0 means sell at the MRP."
+          >
+            <Input
+              id="discount"
+              inputMode="numeric"
+              value={discount}
+              onChange={(event) => {
+                const next = event.target.value.replace(/[^\d]/g, "").slice(0, 3);
+                setDiscount(next);
+
+                const selling = sellingFromDiscount(values.mrp, next);
+                if (selling !== null) set("sellingPrice", selling);
+              }}
+              placeholder="30"
             />
           </Field>
 
@@ -291,12 +339,17 @@ export function ProductForm({
             label="Selling price (₹)"
             error={fieldErrors.sellingPrice}
             htmlFor="sellingPrice"
+            hint="What the customer pays."
           >
             <Input
               id="sellingPrice"
               inputMode="decimal"
               value={values.sellingPrice}
-              onChange={(event) => set("sellingPrice", event.target.value)}
+              onChange={(event) => {
+                const selling = event.target.value;
+                set("sellingPrice", selling);
+                setDiscount(discountFromSelling(values.mrp, selling) ?? "");
+              }}
               placeholder="8999"
             />
           </Field>
@@ -469,6 +522,58 @@ function Field({
       ) : null}
     </div>
   );
+}
+
+/**
+ * MRP, discount and selling price: give any two, get the third.
+ *
+ * The owner prices either way round — "₹12,999 at 30% off" or "₹12,999, sell
+ * at ₹8,999" — so whichever is typed second fills in the other. A discount of
+ * 0 is meaningful: sell at the MRP, with no badge on the shop.
+ *
+ * Only the selling price is saved. The discount is recomputed from the two
+ * prices wherever it is shown, so it cannot drift out of step with them.
+ */
+const MONEY_RE = /^\d{1,8}(\.\d{1,2})?$/;
+
+function moneyToPaise(value: string): number | null {
+  if (!MONEY_RE.test(value.trim())) return null;
+  const [whole, fraction = "0"] = value.trim().split(".");
+  return Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
+}
+
+function paiseToMoney(paise: number): string {
+  const rupees = Math.trunc(paise / 100);
+  const rest = paise % 100;
+  return rest === 0 ? String(rupees) : `${rupees}.${String(rest).padStart(2, "0")}`;
+}
+
+/** Selling price from an MRP and a whole-percent discount. */
+function sellingFromDiscount(mrp: string, discount: string): string | null {
+  const mrpPaise = moneyToPaise(mrp);
+  const trimmed = discount.trim();
+  const percent = Number(trimmed);
+
+  if (mrpPaise === null || trimmed === "" || !Number.isFinite(percent)) return null;
+
+  // 100 is refused rather than computed. It would set the selling price to
+  // zero, which the shop would happily publish and sell for nothing — and it
+  // is far more likely to be a slipped keystroke than a gift. Typing a selling
+  // price of 0 directly is still possible for anyone who truly means it.
+  if (percent < 0 || percent >= 100) return null;
+
+  return paiseToMoney(Math.round(mrpPaise * (1 - percent / 100)));
+}
+
+/** Whole-percent discount from an MRP and a selling price. */
+function discountFromSelling(mrp: string, sellingPrice: string): string | null {
+  const mrpPaise = moneyToPaise(mrp);
+  const sellingPaise = moneyToPaise(sellingPrice);
+
+  if (mrpPaise === null || sellingPaise === null || mrpPaise <= 0) return null;
+  if (sellingPaise > mrpPaise) return null;
+
+  return String(Math.round(((mrpPaise - sellingPaise) / mrpPaise) * 100));
 }
 
 /** Profit and margin, computed in integer paise so nothing rounds via float. */

@@ -4,6 +4,7 @@ import { AppError } from "@/lib/errors";
 import {
   toWishlistProductView,
   wishlistProductSelect,
+  PUBLIC_PRODUCT_WHERE,
 } from "@/lib/queries/product";
 import type { Shopper } from "@/lib/shopper";
 
@@ -47,7 +48,7 @@ export async function addToWishlist(
   productId: string,
 ): Promise<WishlistView> {
   const product = await db.product.findFirst({
-    where: { id: productId, isActive: true },
+    where: { id: productId, ...PUBLIC_PRODUCT_WHERE },
     select: { id: true },
   });
 

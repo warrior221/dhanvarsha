@@ -21,6 +21,18 @@ export function Footer() {
           <Link href="/account/orders" className="hover:text-foreground hover:underline">
             My orders
           </Link>
+          <Link href="/shipping" className="hover:text-foreground hover:underline">
+            Shipping
+          </Link>
+          <Link href="/refunds" className="hover:text-foreground hover:underline">
+            Refunds
+          </Link>
+          <Link href="/terms" className="hover:text-foreground hover:underline">
+            Terms
+          </Link>
+          <Link href="/privacy" className="hover:text-foreground hover:underline">
+            Privacy
+          </Link>
         </nav>
 
         {/* Shop-level membership, which is what the mark means down here.

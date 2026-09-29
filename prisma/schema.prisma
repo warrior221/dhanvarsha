@@ -126,8 +126,14 @@ model Product {
   categoryId       String
   category         Category                @relation(fields: [categoryId], references: [id])
 
-  mrp              Decimal                 @db.Decimal(10, 2)
-  sellingPrice     Decimal                 @db.Decimal(10, 2)
+  /// Optional. The "was" price, struck through on the shop. Without one the
+  /// selling price shows alone, with no strikethrough and no discount badge.
+  mrp              Decimal?                @db.Decimal(10, 2)
+  /// Optional, because a piece is entered when it arrives from the weaver and
+  /// priced later. A piece with no selling price is INVISIBLE to customers —
+  /// it sits in the database waiting for the admin to price it, and pricing it
+  /// is what puts it on the shop.
+  sellingPrice     Decimal?                @db.Decimal(10, 2)
 
   isReadymade      Boolean                 @default(false)
   careInstructions String?
@@ -216,7 +222,10 @@ model ProductVariant {
   product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
   size       String?
   sku        String      @unique
-  price      Decimal     @db.Decimal(10, 2)
+  /// Optional, and this is the price actually charged — Product.sellingPrice
+  /// is what the shop displays. A variant with no price cannot be bought:
+  /// cart and checkout refuse it, and its product is hidden from customers.
+  price      Decimal?    @db.Decimal(10, 2)
   stockQty   Int         @default(0)
   cartItems  CartItem[]
   orderItems OrderItem[]

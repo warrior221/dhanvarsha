@@ -110,12 +110,22 @@ function WishlistCard({ product }: { product: WishlistProductView }) {
           <h2 className="line-clamp-2 text-sm font-medium group-hover:underline">
             {product.name}
           </h2>
-          <Price mrp={product.mrp} sellingPrice={product.sellingPrice} />
+          {/* A piece taken off sale keeps its place here and says so, rather
+              than vanishing from a list someone built deliberately. */}
+          {product.sellingPrice !== null ? (
+            <Price mrp={product.mrp} sellingPrice={product.sellingPrice} />
+          ) : (
+            <p className="text-sm text-muted-foreground">Not available</p>
+          )}
         </div>
       </Link>
 
       <div className="mt-3 flex gap-2">
-        {inStock.length === 0 ? (
+        {!product.isAvailable ? (
+          <Button variant="outline" size="sm" className="flex-1" disabled>
+            Not available
+          </Button>
+        ) : inStock.length === 0 ? (
           <Button variant="outline" size="sm" className="flex-1" disabled>
             Sold out
           </Button>

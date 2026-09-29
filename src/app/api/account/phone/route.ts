@@ -5,6 +5,7 @@ import { apiSuccess, handleApiError } from "@/lib/errors";
 import {
   confirmPhone,
   getPhoneStatus,
+  savePhoneUnverified,
   startPhoneVerification,
 } from "@/lib/queries/customer-phone";
 import { clientIpFrom, enforceRateLimit } from "@/lib/rate-limit";
@@ -18,15 +19,30 @@ const confirmSchema = z.object({
   code: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code."),
 });
 
-/** Sends a WhatsApp code to the number the customer wants to use. */
+/**
+ * Takes the customer's number.
+ *
+ * Normally that means sending a WhatsApp code. While WhatsApp is unavailable
+ * the number is simply recorded, unproven, because a courier still needs
+ * something to ring and there is no channel to prove it on. `sentTo` is null
+ * in that case, which is how the screen knows not to ask for a code.
+ */
 export async function POST(request: NextRequest) {
   try {
     const user = await requireUser();
 
+    // Rate limited either way: this writes to an account and checks a number
+    // against every other one, whether or not a message follows.
     await enforceRateLimit("otpSend", clientIpFrom(request.headers));
     await enforceRateLimit("otpSend", `user:${user.id}`);
 
     const { phone } = sendSchema.parse(await request.json());
+    const { canVerify } = await getPhoneStatus(user.id);
+
+    if (!canVerify) {
+      await savePhoneUnverified(user.id, phone);
+      return apiSuccess({ sentTo: null });
+    }
 
     await startPhoneVerification(user.id, phone);
 

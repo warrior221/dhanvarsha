@@ -2,6 +2,7 @@ import { Role } from "@/generated/prisma";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AdminNav } from "@/components/admin/admin-nav";
+import { countUnpricedProducts } from "@/lib/queries/admin-products";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/auth";
 import { logoutAction } from "@/lib/auth-actions";
@@ -21,6 +22,9 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
   if (!session?.user?.id) {
     redirect("/login?callbackUrl=%2Fadmin");
   }
+
+  const unpricedCount =
+    session.user.role === Role.ADMIN ? await countUnpricedProducts() : 0;
 
   if (session.user.role !== Role.ADMIN) {
     // Next 16 only exposes forbidden() behind the experimental `authInterrupts`
@@ -65,7 +69,7 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
           </div>
         </div>
 
-        <AdminNav />
+        <AdminNav unpricedCount={unpricedCount} />
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-8">{children}</main>

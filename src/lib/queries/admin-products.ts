@@ -19,8 +19,10 @@ export type AdminProductRow = {
   slug: string;
   isActive: boolean;
   categoryName: string;
-  mrp: string;
-  sellingPrice: string;
+  /** Null when no "was" price is set. */
+  mrp: string | null;
+  /** Null until the admin prices the piece. Until then it is not on the shop. */
+  sellingPrice: string | null;
   costPrice: string | null;
   /** ADMIN ONLY, like cost price — it lives in the same protected table. */
   supplierName: string | null;
@@ -46,6 +48,15 @@ export type AdminProductFilters = {
   status?: string | null;
   /** Only products with a variant at or below the low-stock threshold. */
   soldOutOnly?: boolean;
+  /**
+   * Which side of the pricing line to list. Omitted means both.
+   *
+   * An unpriced piece is one that has been entered but not yet priced, and
+   * pricing it is what puts it on the shop. They are kept in their own list
+   * rather than mixed into the catalogue: with ten thousand pieces to tag
+   * gradually, the unpriced ones would otherwise drown everything else.
+   */
+  pricing?: "priced" | "unpriced";
   page?: number;
 };
 
@@ -77,6 +88,14 @@ export async function listAdminProducts(
     and.push({ variants: { every: { stockQty: 0 } } });
   }
 
+  // Priced means BOTH, because that is what the shop requires to show a piece.
+  if (filters.pricing === "priced") {
+    and.push({ mrp: { not: null }, sellingPrice: { not: null } });
+  }
+  if (filters.pricing === "unpriced") {
+    and.push({ OR: [{ mrp: null }, { sellingPrice: null }] });
+  }
+
   const where: Prisma.ProductWhereInput = and.length > 0 ? { AND: and } : {};
 
   const [total, products] = await Promise.all([
@@ -105,7 +124,7 @@ export async function listAdminProducts(
   ]);
 
   const rows: AdminProductRow[] = products.map((product) => {
-    const sellingPrice = product.sellingPrice.toString();
+    const sellingPrice = product.sellingPrice?.toString() ?? null;
     const costPrice = product.cost?.costPrice.toString() ?? null;
 
     return {
@@ -115,11 +134,12 @@ export async function listAdminProducts(
       slug: product.slug,
       isActive: product.isActive,
       categoryName: product.category.name,
-      mrp: product.mrp.toString(),
+      mrp: product.mrp?.toString() ?? null,
       sellingPrice,
       costPrice,
       supplierName: product.cost?.supplierName ?? null,
-      marginPercent: costPrice ? marginPercent(sellingPrice, costPrice) : null,
+      marginPercent:
+        costPrice && sellingPrice ? marginPercent(sellingPrice, costPrice) : null,
       totalStock: product.variants.reduce((sum, v) => sum + v.stockQty, 0),
       variantCount: product.variants.length,
       imageUrl: product.images[0]?.url ?? null,
@@ -166,6 +186,18 @@ export type AdminProductDetail = {
   attributeValueIds: string[];
 };
 
+/**
+ * How many pieces are entered but not yet priced.
+ *
+ * Shown beside the nav link so the queue cannot be forgotten about. A piece
+ * sitting here is stock the shop owns that no customer can buy.
+ */
+export async function countUnpricedProducts(): Promise<number> {
+  return db.product.count({
+    where: { OR: [{ mrp: null }, { sellingPrice: null }] },
+  });
+}
+
 export async function getAdminProduct(id: string): Promise<AdminProductDetail | null> {
   const product = await db.product.findUnique({
     where: { id },
@@ -203,8 +235,8 @@ export async function getAdminProduct(id: string): Promise<AdminProductDetail | 
     sku: product.sku,
     description: product.description,
     categoryId: product.categoryId,
-    mrp: product.mrp.toString(),
-    sellingPrice: product.sellingPrice.toString(),
+    mrp: product.mrp?.toString() ?? "",
+    sellingPrice: product.sellingPrice?.toString() ?? "",
     costPrice: product.cost?.costPrice.toString() ?? "",
     supplierName: product.cost?.supplierName ?? "",
     purchaseNote: product.cost?.purchaseNote ?? "",
@@ -219,7 +251,7 @@ export async function getAdminProduct(id: string): Promise<AdminProductDetail | 
       // older row without it is surfaced as "Free Size" rather than blank.
       size: variant.size ?? "Free Size",
       sku: variant.sku,
-      price: variant.price.toString(),
+      price: variant.price?.toString() ?? "",
       stockQty: variant.stockQty,
     })),
     attributeValueIds: product.attributes.map((link) => link.valueId),
@@ -242,8 +274,8 @@ export async function createProduct(input: ProductFormInput): Promise<string> {
         sku: input.sku,
         description: input.description,
         categoryId: input.categoryId,
-        mrp: input.mrp,
-        sellingPrice: input.sellingPrice,
+        mrp: emptyToNull(input.mrp),
+        sellingPrice: emptyToNull(input.sellingPrice),
         isReadymade: input.isReadymade,
         isActive: input.isActive,
         careInstructions: emptyToNull(input.careInstructions),
@@ -276,7 +308,7 @@ export async function createProduct(input: ProductFormInput): Promise<string> {
         productId: created.id,
         size: variant.size,
         sku: variant.sku,
-        price: variant.price,
+        price: emptyToNull(variant.price),
         stockQty: variant.stockQty,
       })),
     });
@@ -352,8 +384,8 @@ export async function updateProduct(id: string, input: ProductFormInput): Promis
         sku: input.sku,
         description: input.description,
         categoryId: input.categoryId,
-        mrp: input.mrp,
-        sellingPrice: input.sellingPrice,
+        mrp: emptyToNull(input.mrp),
+        sellingPrice: emptyToNull(input.sellingPrice),
         isReadymade: input.isReadymade,
         isActive: input.isActive,
         careInstructions: emptyToNull(input.careInstructions),
@@ -401,7 +433,7 @@ export async function updateProduct(id: string, input: ProductFormInput): Promis
           data: {
             size: variant.size,
             sku: variant.sku,
-            price: variant.price,
+            price: emptyToNull(variant.price),
             stockQty: variant.stockQty,
           },
         });
@@ -411,7 +443,7 @@ export async function updateProduct(id: string, input: ProductFormInput): Promis
             productId: id,
             size: variant.size,
             sku: variant.sku,
-            price: variant.price,
+            price: emptyToNull(variant.price),
             stockQty: variant.stockQty,
           },
         });

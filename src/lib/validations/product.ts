@@ -16,6 +16,15 @@ export const moneySchema = z
   .trim()
   .regex(MONEY, "Enter an amount like 2499 or 2499.50.");
 
+/**
+ * An amount that may be left blank.
+ *
+ * A piece is entered when it arrives from the weaver and priced later, so at
+ * intake there is nothing to type. Blank is not zero: it means "not priced
+ * yet", and a piece with no selling price is invisible to customers.
+ */
+export const optionalMoneySchema = moneySchema.or(z.literal(""));
+
 /** Lowercase, hyphenated, no leading/trailing hyphen. */
 export const slugSchema = z
   .string()
@@ -59,7 +68,7 @@ export const productVariantSchema = z.object({
     .min(1, "Every option needs a size. Use “Free Size” if it is one-size.")
     .max(30),
   sku: skuSchema,
-  price: moneySchema,
+  price: optionalMoneySchema,
   stockQty: z
     .number()
     .int("Stock must be a whole number.")
@@ -79,8 +88,8 @@ export const productFormSchema = z
       .max(5000),
     categoryId: z.string().trim().min(1, "Pick a category."),
 
-    mrp: moneySchema,
-    sellingPrice: moneySchema,
+    mrp: optionalMoneySchema,
+    sellingPrice: optionalMoneySchema,
     /** ADMIN ONLY. Stored in ProductCost, never returned to a customer route. */
     costPrice: moneySchema,
     supplierName: z.string().trim().max(200).optional().or(z.literal("")),
@@ -103,10 +112,36 @@ export const productFormSchema = z
     /** AttributeValue ids that are ticked. */
     attributeValueIds: z.array(z.string().trim().min(1)).default([]),
   })
-  .refine((data) => comparableMoney(data.sellingPrice) <= comparableMoney(data.mrp), {
-    message: "Selling price cannot be more than the MRP.",
+  // MRP and selling price arrive together or not at all. A piece is either
+  // unpriced — sitting in stock waiting to be priced — or fully priced with an
+  // MRP to strike through. Half of a price is not a state the shop can show.
+  .refine((data) => (data.mrp === "") === (data.sellingPrice === ""), {
+    message:
+      "Give both an MRP and a selling price, or leave both blank to keep this piece off the shop.",
     path: ["sellingPrice"],
   })
+  .refine(
+    (data) =>
+      data.sellingPrice === "" ||
+      data.mrp === "" ||
+      comparableMoney(data.sellingPrice) <= comparableMoney(data.mrp),
+    {
+      message: "Selling price cannot be more than the MRP.",
+      path: ["sellingPrice"],
+    },
+  )
+  // A price on the shop is the variant price; the product's selling price is
+  // what is displayed. Having one without the other would show a shopper a
+  // figure they cannot buy at.
+  .refine(
+    (data) =>
+      data.sellingPrice === "" ||
+      data.variants.every((variant) => variant.price !== ""),
+    {
+      message: "Give every size a price, or clear the selling price to keep this piece off the shop.",
+      path: ["variants"],
+    },
+  )
   .refine(
     (data) => new Set(data.variants.map((v) => v.sku)).size === data.variants.length,
     { message: "Two sizes share the same SKU.", path: ["variants"] },

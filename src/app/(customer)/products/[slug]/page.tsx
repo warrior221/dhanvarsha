@@ -8,11 +8,13 @@ import { Price } from "@/components/shared/price";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { db } from "@/lib/db";
-import { publicProductSelect, toProductView } from "@/lib/queries/product";
+import { publicProductSelect, toProductView,
+  PUBLIC_PRODUCT_WHERE,
+} from "@/lib/queries/product";
 
 async function getProduct(slug: string) {
   const product = await db.product.findFirst({
-    where: { slug, isActive: true },
+    where: { slug, ...PUBLIC_PRODUCT_WHERE },
     select: publicProductSelect,
   });
 

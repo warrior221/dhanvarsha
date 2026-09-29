@@ -57,7 +57,12 @@ export function CheckoutClient({
 
   // A confirmed mobile number is required before an order can be placed. The
   // server enforces this too — this only keeps the button honest.
-  const [phoneVerified, setPhoneVerified] = useState(phone.verified);
+  // "Settled", not "verified": while no code can be sent, having the number is
+  // as far as this can go, and the button must not wait for proof that nothing
+  // is able to produce.
+  const [phoneReady, setPhoneReady] = useState(
+    phone.canVerify ? phone.verified : Boolean(phone.phone),
+  );
 
   const selectedAddress = list.find((address) => address.id === selectedId) ?? null;
 
@@ -179,11 +184,11 @@ export function CheckoutClient({
         </section>
 
         {/* ------------------------- mobile -------------------------- */}
-        {!phoneVerified ? (
+        {!phoneReady ? (
           <PhoneStep
             initial={phone}
             suggested={selectedAddress?.phone ?? null}
-            onVerified={() => setPhoneVerified(true)}
+            onVerified={() => setPhoneReady(true)}
           />
         ) : null}
 
@@ -204,7 +209,7 @@ export function CheckoutClient({
           <Button
             type="button"
             size="lg"
-            disabled={busy || !selectedId || !phoneVerified}
+            disabled={busy || !selectedId || !phoneReady}
             onClick={() => void placeOrder()}
           >
             {busy ? (
@@ -224,9 +229,11 @@ export function CheckoutClient({
             <p className="text-sm text-muted-foreground">
               Choose a delivery address above first.
             </p>
-          ) : !phoneVerified ? (
+          ) : !phoneReady ? (
             <p className="text-sm text-muted-foreground">
-              Confirm your mobile number above first.
+              {phone.canVerify
+                ? "Confirm your mobile number above first."
+                : "Add your mobile number above first."}
             </p>
           ) : null}
         </section>

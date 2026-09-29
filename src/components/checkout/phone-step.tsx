@@ -10,12 +10,15 @@ import { ApiError, requestJson } from "@/lib/api-client";
 import type { PhoneStatus } from "@/lib/queries/customer-phone";
 
 /**
- * Confirming a mobile number, once, before the first order.
+ * Taking a mobile number, once, before the first order.
  *
  * The courier phones ahead on the day, so an unreachable number is a failed
- * delivery and a parcel that travels twice. The code goes over WhatsApp
- * rather than email on purpose: a code read in an inbox proves nothing about
- * whether the handset works.
+ * delivery and a parcel that travels twice. When a code can be sent it goes
+ * over WhatsApp rather than email on purpose: a code read in an inbox proves
+ * nothing about whether the handset works.
+ *
+ * While WhatsApp is unavailable the number is taken but not proven, and this
+ * says so plainly instead of implying a check that did not happen.
  *
  * Asked once. After this the number is on the account and later orders go
  * straight through.
@@ -31,6 +34,8 @@ export function PhoneStep({
   onVerified: () => void;
 }) {
   const [phone, setPhone] = useState(initial.phone ?? suggested ?? "");
+  // Null while no code can be sent, so there is no second step to show.
+  const canVerify = initial.canVerify;
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -41,14 +46,27 @@ export function PhoneStep({
     setError(null);
 
     try {
-      const result = await requestJson<{ sentTo: string }>(
+      const result = await requestJson<{ sentTo: string | null }>(
         "/api/account/phone",
         "POST",
         { phone: phone.trim() },
       );
+
+      // No code to wait for: the number is saved and checkout can proceed.
+      if (result.sentTo === null) {
+        onVerified();
+        return;
+      }
+
       setSentTo(result.sentTo);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not send that code.");
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : canVerify
+            ? "Could not send that code."
+            : "Could not save that number.",
+      );
     } finally {
       setBusy(false);
     }
@@ -76,7 +94,9 @@ export function PhoneStep({
       <div className="flex items-start gap-3">
         <Phone className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden />
         <div>
-          <h2 className="text-lg font-medium">Confirm your mobile number</h2>
+          <h2 className="text-lg font-medium">
+            {canVerify ? "Confirm your mobile number" : "Your mobile number"}
+          </h2>
           <p className="text-sm text-muted-foreground">
             The courier will call this number on the day. We only ask once.
           </p>
@@ -168,7 +188,14 @@ export function PhoneStep({
                 Sending…
               </>
             ) : (
+              canVerify ? (
               "Send me a code"
+            ) : (
+              <>
+                <Check className="size-4" aria-hidden />
+                Save number
+              </>
+            )
             )}
           </Button>
         </div>

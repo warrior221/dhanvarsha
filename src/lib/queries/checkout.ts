@@ -71,13 +71,20 @@ async function readCartLines(userId: string): Promise<CartLine[]> {
 
   if (!cart) return [];
 
-  return cart.items
-    .filter((item) => item.variant.product.isActive)
-    .map((item) => ({
-      variantId: item.variant.id,
-      quantity: item.quantity,
-      unitPricePaise: toPaise(item.variant.price.toString()),
-    }));
+  // Same rule as the cart view: a deactivated product, or one whose price has
+  // been cleared, cannot be sold and must not reach a total.
+  return cart.items.flatMap((item) => {
+    const price = item.variant.price;
+    if (!item.variant.product.isActive || price === null) return [];
+
+    return [
+      {
+        variantId: item.variant.id,
+        quantity: item.quantity,
+        unitPricePaise: toPaise(price.toString()),
+      },
+    ];
+  });
 }
 
 /**
@@ -368,7 +375,20 @@ async function createOrderTransaction(
     let subtotalPaise = 0;
 
     const orderItems = lines.map((item) => {
-      const unitPaise = toPaise(item.variant.price.toString());
+      // Refuse the whole order rather than quietly dropping the line. The
+      // shopper is looking at a total that included it; silently charging
+      // them less for fewer pieces is worse than telling them to look again.
+      const price = item.variant.price;
+
+      if (price === null) {
+        throw new AppError(
+          "ITEM_UNAVAILABLE",
+          `${item.variant.product.name} is not on sale at the moment. Please remove it from your bag.`,
+          409,
+        );
+      }
+
+      const unitPaise = toPaise(price.toString());
       subtotalPaise += unitPaise * item.quantity;
 
       return {
@@ -377,7 +397,7 @@ async function createOrderTransaction(
         productName: item.variant.product.name,
         productImage: item.variant.product.images[0]?.url ?? "",
         size: item.variant.size,
-        price: item.variant.price,
+        price,
         costPrice: item.variant.product.cost?.costPrice ?? new Prisma.Decimal(0),
         quantity: item.quantity,
       };

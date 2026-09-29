@@ -48,7 +48,13 @@ export function formatInr(amount: string): string {
  * Whole-number discount percentage, or null when there is no saving.
  * Never stored — a stored copy would drift out of sync with the prices (spec 4).
  */
-export function discountPercent(mrp: string, sellingPrice: string): number | null {
+export function discountPercent(
+  mrp: string | null,
+  sellingPrice: string,
+): number | null {
+  // No MRP means no "was" price to strike through, so no saving to claim.
+  if (mrp === null) return null;
+
   const mrpPaise = toPaise(mrp);
   const sellingPaise = toPaise(sellingPrice);
 

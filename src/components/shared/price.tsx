@@ -14,7 +14,8 @@ export function Price({
   size = "md",
   className,
 }: {
-  mrp: string;
+  /** Null when the piece has no "was" price. */
+  mrp: string | null;
   sellingPrice: string;
   size?: "md" | "lg";
   className?: string;
@@ -41,7 +42,7 @@ export function Price({
             )}
           >
             <span className="sr-only">Was </span>
-            {formatInr(mrp)}
+            {formatInr(mrp!)}
           </span>
           <span
             className={cn(

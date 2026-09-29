@@ -2,7 +2,7 @@ import { OtpChannel, OtpPurpose } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { sendOtp, verifyOtp } from "@/lib/otp";
-import { sendWhatsappOtp } from "@/lib/whatsapp";
+import { isWhatsappConfigured, sendWhatsappOtp } from "@/lib/whatsapp";
 
 /**
  * The customer's mobile number, and proving it reaches them.
@@ -33,8 +33,31 @@ export async function getPhoneStatus(userId: string): Promise<PhoneStatus> {
   return {
     phone: user?.phone ?? null,
     verified: Boolean(user?.phoneVerified),
-    canVerify: true,
+    // There is no way to reach a handset until Meta approves the business
+    // account, so the code step is not merely skipped in the UI — the rule
+    // below stops requiring it. Setting the three WhatsApp variables turns
+    // the whole thing back on with no code change.
+    canVerify: isWhatsappConfigured(),
   };
+}
+
+/**
+ * Two accounts sharing a number makes "who do I call" ambiguous, so a number
+ * on someone else's account cannot be claimed here.
+ */
+async function assertNumberIsFree(userId: string, phone: string): Promise<void> {
+  const taken = await db.user.findFirst({
+    where: { phone, NOT: { id: userId } },
+    select: { id: true },
+  });
+
+  if (taken) {
+    throw new AppError(
+      "PHONE_TAKEN",
+      "That number is already on another account. Sign in with it instead, or use a different number.",
+      409,
+    );
+  }
 }
 
 /** Identifier the code is filed under, so it cannot be redeemed elsewhere. */
@@ -53,20 +76,7 @@ export async function startPhoneVerification(
   userId: string,
   phone: string,
 ): Promise<void> {
-  // A number already proven on somebody else's account cannot be claimed
-  // here — two accounts sharing a number makes "who do I call" ambiguous.
-  const taken = await db.user.findFirst({
-    where: { phone, NOT: { id: userId } },
-    select: { id: true },
-  });
-
-  if (taken) {
-    throw new AppError(
-      "PHONE_TAKEN",
-      "That number is already on another account. Sign in with it instead, or use a different number.",
-      409,
-    );
-  }
+  await assertNumberIsFree(userId, phone);
 
   // sendOtp() owns the cooldown, attempt limit, hashing and expiry; this only
   // chooses where the message goes.
@@ -76,6 +86,42 @@ export async function startPhoneVerification(
     purpose: OtpPurpose.PHONE_VERIFICATION,
     deliver: (code) => sendWhatsappOtp({ phone, code }),
   });
+}
+
+/**
+ * Records the number WITHOUT proving it, for as long as no code can be sent.
+ *
+ * A courier still needs a number to ring, so it is collected either way — but
+ * an unproven number is saved with phoneVerified left null, so nothing in the
+ * shop can later mistake it for a checked one. The moment WhatsApp is
+ * configured this refuses, so it cannot become a quiet way around the check.
+ */
+export async function savePhoneUnverified(
+  userId: string,
+  phone: string,
+): Promise<void> {
+  if (isWhatsappConfigured()) {
+    throw new AppError(
+      "VERIFICATION_REQUIRED",
+      "Confirm your mobile number with the code we sent.",
+      400,
+    );
+  }
+
+  await assertNumberIsFree(userId, phone);
+
+  try {
+    await db.user.update({
+      where: { id: userId },
+      data: { phone },
+    });
+  } catch {
+    throw new AppError(
+      "PHONE_TAKEN",
+      "That number was just claimed by another account.",
+      409,
+    );
+  }
 }
 
 /** Checks the code and puts the number on the account for good. */
@@ -123,7 +169,9 @@ export async function assertCanOrder(userId: string): Promise<void> {
     );
   }
 
-  if (!status.verified) {
+  // Only demanded while a code can actually be delivered. Requiring proof
+  // that nothing can supply would simply close the shop.
+  if (status.canVerify && !status.verified) {
     throw new AppError(
       "PHONE_UNVERIFIED",
       "Confirm your mobile number before placing the order.",

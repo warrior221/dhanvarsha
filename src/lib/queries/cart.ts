@@ -62,7 +62,7 @@ function toCartView(
     variant: {
       id: string;
       size: string | null;
-      price: { toString(): string };
+      price: { toString(): string } | null;
       stockQty: number;
       product: {
         id: string;
@@ -75,14 +75,21 @@ function toCartView(
     };
   }[],
 ): CartView {
-  // A product deactivated after it was added should not linger in the cart.
-  const live = items.filter((item) => item.variant.product.isActive);
+  // A product deactivated after it was added should not linger in the cart,
+  // and neither should a piece whose price has been cleared. Neither can be
+  // sold, so neither belongs in a total. flatMap rather than filter so the
+  // price is narrowed to non-null for the mapping below.
+  const live = items.flatMap((item) => {
+    const price = item.variant.price;
+    if (!item.variant.product.isActive || price === null) return [];
+    return [{ ...item, unitPrice: price.toString() }];
+  });
 
   let subtotalPaise = 0;
   let itemCount = 0;
 
   const views: CartItemView[] = live.map((item) => {
-    const unitPaise = toPaise(item.variant.price.toString());
+    const unitPaise = toPaise(item.unitPrice);
     const linePaise = unitPaise * item.quantity;
 
     subtotalPaise += linePaise;
@@ -93,7 +100,7 @@ function toCartView(
       quantity: item.quantity,
       size: item.variant.size,
       stockQty: item.variant.stockQty,
-      unitPrice: item.variant.price.toString(),
+      unitPrice: item.unitPrice,
       lineTotal: paiseToDecimal(linePaise),
       product: {
         id: item.variant.product.id,
