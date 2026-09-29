@@ -252,17 +252,20 @@ past purchase lines keep the cost they were bought at. (Phase 2.)
 
 ## 3d. Still to build from these rules
 
-1. **An "awaiting pricing" queue in the admin.** The owner's words: after entry
-   every piece "sits in admin in another column waiting for MRP and approval".
-   Today an unpriced piece shows as "Not priced" in the products list but has
-   no queue of its own. Needs: a filter or column listing exactly the pieces
-   with no price, so pricing them is a deliberate pass rather than hunting
-   through the catalogue.
-2. **An approval step, separate from pricing.** The owner named MRP *and*
-   approval as two things a piece waits for. It is not yet decided whether
-   approval is its own flag (the addendum's `isListedOnline`) or whether
-   pricing IS the approval. Ask before building.
-3. **Weighted average on restock** (§3c), as part of Phase 2.
+1. ~~An "awaiting pricing" queue~~ — **BUILT** 29 September 2026.
+   `/admin/products/unpriced`, with a count badge in the admin nav. Unpriced
+   pieces were also removed from the main Products list, which now means "on
+   the shop"; ten thousand pieces tagged gradually would otherwise bury the
+   catalogue.
+2. ~~An approval step separate from pricing~~ — **SETTLED: there is none.**
+   Pricing IS the approval. A piece with an MRP and a selling price is on the
+   shop; clear either and it comes off. No `isListedOnline` flag was added —
+   two ways of saying the same thing eventually disagree.
+3. **Weighted average on restock** (§3c), as part of Phase 2. Still to build.
+
+A customer's only route to an unpriced piece is a wishlist they had already
+saved it to, where it reads "Not available" with the button disabled. The shop
+grid, the product page, search and the sitemap all hide it.
 
 ## 3b. Still to settle
 
