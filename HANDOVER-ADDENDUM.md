@@ -292,6 +292,49 @@ create and update, and does not look like "an inventory edit".
 
 ---
 
+## 3e. Build progress
+
+**Phase 1 — Stock ledger: DONE** (29 September 2026).
+`StockMovement` + `StockReason`, and `moveStock()` / `setStockTo()` in
+`src/lib/queries/stock.ts` as the only way stock is allowed to change. All five
+write paths converted — order placed, order cancelled, the inventory screen,
+the product form on create AND update, and the seed. `purchaseId` and
+`stocktakeId` were left out until Purchase and Stocktake exist.
+
+Checkout now creates the order BEFORE taking stock, so each movement can name
+the order that caused it; inside a transaction the ordering is free.
+
+The inventory cell is no longer an inline edit — changing a count asks for a
+reason (DAMAGE or ADJUSTMENT) and a note, enforced on the server too.
+
+Two scripts:
+- `npx tsx scripts/backfill-stock-ledger.ts` — one OPENING_BALANCE per
+  existing variant. Run once; safe to repeat.
+- `npx tsx scripts/check-stock-ledger.ts` — proves `sum(delta) == stockQty`
+  for every variant and exits non-zero on drift. Worth wiring into CI.
+
+**Phase 2 — in progress.** Schema is in: `Supplier`, `SupplierPhotoView`,
+`Purchase`, `PurchaseItem`, `ProductCost.supplierId`, and
+`ProductVariant.barcode`.
+
+Barcodes are done: `src/lib/barcode.ts` generates a `DV` + 9-character
+Crockford base32 code (no I, L, O or U, so a code read down the phone or typed
+by hand cannot be misread). Issued on variant creation and never changed — a
+barcode is ink on a tag, and reissuing one invalidates every label printed.
+`npx tsx scripts/backfill-barcodes.ts` covers older variants; all 10 existing
+ones now have codes.
+
+Still to build in Phase 2: the supplier admin screens, the purchase/intake
+screen, the supplier photo through ImageKit private files, and labels.
+
+**The free-text supplier migration in §9 is not needed.** All five
+`ProductCost.supplierName` values are on placeholder products that go in the
+pre-launch cleanup. There is nothing real to group, so no grouping tool was
+built and none should be. New purchases use `supplierId` from the start.
+
+**Labels remain blocked on open question 1** — the printer model and label
+size.
+
 ## 4. Open questions — ask the owner before the phase they affect
 
 1. **Label printer model and label size**, before building labels (Phase 2).

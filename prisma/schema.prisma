@@ -77,6 +77,8 @@ model User {
   shopReviews     ShopReview[]
   statusChanges   OrderStatusHistory[]
   stockMovements  StockMovement[]
+  purchases       Purchase[]
+  supplierPhotoViews SupplierPhotoView[]
   sessions        Session[]
   adminMfa        AdminMfa?
   setupTokens     SetupToken[]
@@ -166,7 +168,12 @@ model ProductCost {
   productId    String   @unique
   product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   costPrice    Decimal  @db.Decimal(10, 2)
+  /// The old free-text name. Kept until every row has been matched to a
+  /// Supplier and the owner has confirmed the groupings — never merged
+  /// silently, because "Ramesh" and "Ramesh Weavers" may be two people.
   supplierName String?
+  supplierId   String?
+  supplier     Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   purchaseNote String?
   updatedAt    DateTime @updatedAt
 }
@@ -231,6 +238,10 @@ model ProductVariant {
   cartItems  CartItem[]
   orderItems OrderItem[]
   movements  StockMovement[]
+  purchaseItems PurchaseItem[]
+  /// Code 128, printed on the tag and scanned at the counter. Unique across
+  /// the shop. Null only for variants created before barcodes existed.
+  barcode    String?     @unique
 
   @@index([productId])
 }
@@ -617,4 +628,107 @@ model StockMovement {
 
   @@index([variantId, createdAt])
   @@index([reason, createdAt])
+}
+
+/// A weaver or seller the shop buys from.
+///
+/// A RECORD, not a typed name. Free text turns "Ramesh Weavers", "Ramesh
+/// weavers" and "Ramesh" into three suppliers in any report, and has nowhere
+/// to keep a phone number.
+///
+/// Never deleted once it has purchases — deactivated instead, so old purchase
+/// records keep naming who supplied the goods.
+model Supplier {
+  id        String  @id @default(cuid())
+  name      String
+  /// Unique so a weaver cannot be added twice. Optional only because
+  /// suppliers migrated from the old free-text field may not have one yet.
+  mobile    String? @unique
+  notes     String?
+  isActive  Boolean @default(true)
+  /// One optional photo, held IN THE DATABASE rather than on an image host.
+  ///
+  /// The shop may use it for the weaver's face or for an identity document;
+  /// nothing is read from it, verified, or extracted, and no Aadhaar number is
+  /// ever stored as text.
+  ///
+  /// In the database on purpose. An image host serves files by URL, and a URL
+  /// that exists can be shared, guessed or cached — "not linked from the site"
+  /// is not the same as private. Here there is no URL at all: the bytes come
+  /// out only through an admin-guarded route, and every viewing is recorded.
+  ///
+  /// Neon encrypts at rest; the protection that matters is the guard on the
+  /// route.
+  photo         Bytes?
+  /// A small square crop, shown as the face of the weaver's card.
+  ///
+  /// Kept separately so a list of cards never loads the full image. It is also
+  /// too small for the text on a photo ID to be read, which is the point: the
+  /// card shows you WHO, and the readable original stays behind a deliberate
+  /// press that gets logged.
+  photoThumb    Bytes?
+  photoMimeType String?
+  /// Set whenever a photo is stored, cleared when it is removed. Lets a list
+  /// ask "is there a photo?" without ever loading the bytes.
+  photoUpdatedAt DateTime?
+
+  purchases   Purchase[]
+  costs       ProductCost[]
+  photoViews  SupplierPhotoView[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([name])
+}
+
+/// Every time an admin opened a supplier's photo.
+///
+/// The photo may be an identity document, so looking at one is recorded. Not
+/// to police the shop, but so "who has seen this" has an answer.
+model SupplierPhotoView {
+  id         String   @id @default(cuid())
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  viewedById String
+  viewedBy   User     @relation(fields: [viewedById], references: [id], onDelete: Cascade)
+  viewedAt   DateTime @default(now())
+
+  @@index([supplierId, viewedAt])
+}
+
+/// One delivery from one supplier.
+model Purchase {
+  id             String         @id @default(cuid())
+  /// Human-facing, P-00001 upwards.
+  purchaseNumber String         @unique
+  /// Optional: opening stock already in the shop has no delivery behind it.
+  supplierId     String?
+  supplier       Supplier?      @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  purchaseDate   DateTime       @default(now())
+  note           String?
+  items          PurchaseItem[]
+  createdById    String?
+  createdBy      User?          @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime       @default(now())
+
+  @@index([supplierId, purchaseDate])
+  @@index([purchaseDate])
+}
+
+/// One line of a delivery: this many of this piece, at this cost.
+///
+/// `unitCost` is a SNAPSHOT of what that batch cost. The product's current
+/// cost may move on afterwards — a restock averages it — but what was paid on
+/// the day never changes.
+model PurchaseItem {
+  id         String         @id @default(cuid())
+  purchaseId String
+  purchase   Purchase       @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  variantId  String
+  variant    ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  quantity   Int
+  unitCost   Decimal        @db.Decimal(10, 2)
+
+  @@index([purchaseId])
+  @@index([variantId])
 }

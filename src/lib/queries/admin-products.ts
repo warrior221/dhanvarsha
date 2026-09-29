@@ -1,6 +1,7 @@
 import type { Prisma } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import { generateBarcode } from "@/lib/barcode";
 import { moveStock, setStockTo } from "@/lib/queries/stock";
 import { destroyImage } from "@/lib/imagekit";
 import { toPaise } from "@/lib/format";
@@ -318,6 +319,9 @@ export async function createProduct(
         sku: variant.sku,
         price: emptyToNull(variant.price),
         stockQty: 0,
+        // Issued here and never changed. A barcode is ink on a tag; reissuing
+        // one would invalidate every label already printed.
+        barcode: generateBarcode(),
       })),
       select: { id: true, sku: true },
     });
@@ -484,6 +488,7 @@ export async function updateProduct(
             sku: variant.sku,
             price: emptyToNull(variant.price),
             stockQty: 0,
+            barcode: generateBarcode(),
           },
           select: { id: true },
         });

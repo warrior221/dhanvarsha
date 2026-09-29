@@ -456,6 +456,9 @@ async function main(): Promise<void> {
           sku: variant.sku,
           price: variant.price,
           stockQty: 0,
+          // Deterministic from the SKU so re-seeding does not reissue codes.
+          // Real stock gets a random one; seed data only has to be unique.
+          barcode: `DVSEED${variant.sku.replace(/[^A-Z0-9]/g, "").slice(-5)}`,
         },
         select: { id: true },
       });
