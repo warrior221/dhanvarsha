@@ -11,6 +11,7 @@ const LINKS = [
   { href: "/admin/products/unpriced", label: "Unpriced", badge: true },
   { href: "/admin/attributes", label: "Attributes" },
   { href: "/admin/check-in", label: "Check in" },
+  { href: "/admin/scan-out", label: "Scan out" },
   { href: "/admin/inventory", label: "Inventory" },
   { href: "/admin/suppliers", label: "Weavers" },
   { href: "/admin/reports", label: "Reports" },
