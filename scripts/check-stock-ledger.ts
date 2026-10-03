@@ -37,11 +37,11 @@ async function main(): Promise<void> {
       db.productVariant.findMany({
         select: {
           id: true,
-          sku: true,
+          barcode: true,
           stockQty: true,
           product: { select: { name: true } },
         },
-        orderBy: { sku: "asc" },
+        orderBy: { barcode: "asc" },
       }),
       db.stockMovement.groupBy({ by: ["variantId"], _sum: { delta: true } }),
     ]);
@@ -58,7 +58,7 @@ async function main(): Promise<void> {
 
     for (const variant of mismatched) {
       console.log(
-        `  MISMATCH  ${variant.sku}  (${variant.product.name})  stockQty ${variant.stockQty}, ledger ${ledger.get(variant.id) ?? 0}`,
+        `  MISMATCH  ${variant.barcode}  (${variant.product.name})  stockQty ${variant.stockQty}, ledger ${ledger.get(variant.id) ?? 0}`,
       );
     }
 
@@ -66,7 +66,7 @@ async function main(): Promise<void> {
     const negative = variants.filter((variant) => variant.stockQty < 0);
 
     for (const variant of negative) {
-      console.log(`  NEGATIVE  ${variant.sku}: ${variant.stockQty}`);
+      console.log(`  NEGATIVE  ${variant.barcode}: ${variant.stockQty}`);
     }
 
     const movements = await db.stockMovement.count();

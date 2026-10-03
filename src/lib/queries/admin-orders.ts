@@ -158,7 +158,6 @@ export type AdminOrderDetail = {
   items: {
     productName: string;
     productImage: string;
-    size: string | null;
     priceFormatted: string;
     costFormatted: string;
     quantity: number;
@@ -219,7 +218,6 @@ export async function getAdminOrder(
         select: {
           productName: true,
           productImage: true,
-          size: true,
           price: true,
           costPrice: true,
           quantity: true,
@@ -258,7 +256,6 @@ export async function getAdminOrder(
       return {
         productName: item.productName,
         productImage: item.productImage,
-        size: item.size,
         priceFormatted: formatInr(item.price.toString()),
         costFormatted: formatInr(item.costPrice.toString()),
         quantity: item.quantity,

@@ -3,7 +3,6 @@ import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { generateBarcode } from "@/lib/barcode";
 import { moveStock, setStockTo } from "@/lib/queries/stock";
-import { destroyImage } from "@/lib/imagekit";
 import { toPaise } from "@/lib/format";
 import type { ProductFormInput } from "@/lib/validations/product";
 
@@ -16,7 +15,8 @@ export const ADMIN_PAGE_SIZE = 20;
 
 export type AdminProductRow = {
   id: string;
-  sku: string;
+  /** The piece's one code, printed on its tag. Null only if it has no piece. */
+  code: string | null;
   name: string;
   slug: string;
   isActive: boolean;
@@ -73,7 +73,8 @@ export async function listAdminProducts(
     and.push({
       OR: [
         { name: { contains: filters.q, mode: "insensitive" } },
-        { sku: { contains: filters.q, mode: "insensitive" } },
+        // The code on the tag, which is the only code a piece has.
+        { variants: { some: { barcode: { contains: filters.q, mode: "insensitive" } } } },
       ],
     });
   }
@@ -109,7 +110,6 @@ export async function listAdminProducts(
       take: ADMIN_PAGE_SIZE,
       select: {
         id: true,
-        sku: true,
         name: true,
         slug: true,
         isActive: true,
@@ -120,7 +120,7 @@ export async function listAdminProducts(
         // Admin opts IN to cost. Customer selects never include this.
         cost: { select: { costPrice: true, supplierName: true } },
         images: { select: { url: true }, orderBy: { position: "asc" }, take: 1 },
-        variants: { select: { stockQty: true } },
+        variants: { select: { stockQty: true, barcode: true } },
       },
     }),
   ]);
@@ -131,7 +131,7 @@ export async function listAdminProducts(
 
     return {
       id: product.id,
-      sku: product.sku,
+      code: product.variants[0]?.barcode ?? null,
       name: product.name,
       slug: product.slug,
       isActive: product.isActive,
@@ -171,7 +171,6 @@ export type AdminProductDetail = {
   id: string;
   name: string;
   slug: string;
-  sku: string;
   description: string;
   categoryId: string;
   mrp: string;
@@ -179,14 +178,90 @@ export type AdminProductDetail = {
   costPrice: string;
   supplierName: string;
   purchaseNote: string;
-  isReadymade: boolean;
   isActive: boolean;
   careInstructions: string;
   silkMarkNumber: string;
+  colourName: string;
+  /** A sibling colour, which is how the form expresses "same design as". */
+  sameDesignAsProductId: string | null;
+  /** The other colours of this design, for the form to show what it is linked to. */
+  otherColours: { id: string; name: string; colourName: string | null }[];
   images: { url: string; publicId: string; altText: string }[];
-  variants: { id: string; size: string; sku: string; price: string; stockQty: number }[];
+  /** The one variant's stock. */
+  stockQty: number;
+  /** The piece's one code. Read-only: issued once and never reissued. */
+  code: string | null;
   attributeValueIds: string[];
 };
+
+export type DesignMatch = {
+  id: string;
+  name: string;
+  /** The piece's code, printed on its tag. */
+  code: string | null;
+  colourName: string | null;
+  imageUrl: string | null;
+  /** How many colours are already linked together, including this one. */
+  coloursInGroup: number;
+};
+
+/**
+ * Finds a product to link a colour to.
+ *
+ * Searches unpriced pieces too: colours are usually entered one after another,
+ * and the second one is often linked before either has been priced.
+ */
+export async function searchDesigns(
+  query: string,
+  excludeProductId?: string,
+): Promise<DesignMatch[]> {
+  const term = query.trim();
+
+  if (term.length < 2) return [];
+
+  const products = await db.product.findMany({
+    where: {
+      ...(excludeProductId ? { id: { not: excludeProductId } } : {}),
+      OR: [
+        { name: { contains: term, mode: "insensitive" } },
+        { colourName: { contains: term, mode: "insensitive" } },
+        { variants: { some: { barcode: { contains: term, mode: "insensitive" } } } },
+      ],
+    },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+    select: {
+      id: true,
+      name: true,
+      colourName: true,
+      groupId: true,
+      images: { select: { url: true }, orderBy: { position: "asc" }, take: 1 },
+      variants: { select: { barcode: true }, orderBy: { barcode: "asc" }, take: 1 },
+    },
+  });
+
+  const groupIds = [
+    ...new Set(products.map((p) => p.groupId).filter((id): id is string => id !== null)),
+  ];
+
+  const counts = await db.product.groupBy({
+    by: ["groupId"],
+    where: { groupId: { in: groupIds } },
+    _count: { _all: true },
+  });
+
+  const sizeByGroup = new Map(counts.map((row) => [row.groupId, row._count._all]));
+
+  return products.map((product) => ({
+    id: product.id,
+    name: product.name,
+    code: product.variants[0]?.barcode ?? null,
+    colourName: product.colourName,
+    imageUrl: product.images[0]?.url ?? null,
+    coloursInGroup:
+      product.groupId === null ? 1 : (sizeByGroup.get(product.groupId) ?? 1),
+  }));
+}
 
 /**
  * How many pieces are entered but not yet priced.
@@ -207,22 +282,25 @@ export async function getAdminProduct(id: string): Promise<AdminProductDetail | 
       id: true,
       name: true,
       slug: true,
-      sku: true,
       description: true,
       categoryId: true,
       mrp: true,
       sellingPrice: true,
-      isReadymade: true,
       isActive: true,
       careInstructions: true,
       silkMarkNumber: true,
+      colourName: true,
+      groupId: true,
       cost: { select: { costPrice: true, supplierName: true, purchaseNote: true } },
       images: {
         select: { url: true, publicId: true, altText: true },
         orderBy: { position: "asc" },
       },
+      // Exactly one. The form cannot make a second, and nothing else does.
       variants: {
-        select: { id: true, size: true, sku: true, price: true, stockQty: true },
+        orderBy: { barcode: "asc" },
+        take: 1,
+        select: { id: true, stockQty: true, barcode: true },
       },
       attributes: { select: { valueId: true } },
     },
@@ -230,11 +308,22 @@ export async function getAdminProduct(id: string): Promise<AdminProductDetail | 
 
   if (!product) return null;
 
+  // The other colours of this design, if it is part of a group.
+  const otherColours =
+    product.groupId === null
+      ? []
+      : await db.product.findMany({
+          where: { groupId: product.groupId, id: { not: product.id } },
+          orderBy: { name: "asc" },
+          select: { id: true, name: true, colourName: true },
+        });
+
+  const piece = product.variants[0];
+
   return {
     id: product.id,
     name: product.name,
     slug: product.slug,
-    sku: product.sku,
     description: product.description,
     categoryId: product.categoryId,
     mrp: product.mrp?.toString() ?? "",
@@ -242,20 +331,15 @@ export async function getAdminProduct(id: string): Promise<AdminProductDetail | 
     costPrice: product.cost?.costPrice.toString() ?? "",
     supplierName: product.cost?.supplierName ?? "",
     purchaseNote: product.cost?.purchaseNote ?? "",
-    isReadymade: product.isReadymade,
     isActive: product.isActive,
     careInstructions: product.careInstructions ?? "",
     silkMarkNumber: product.silkMarkNumber ?? "",
+    colourName: product.colourName ?? "",
+    sameDesignAsProductId: otherColours[0]?.id ?? null,
+    otherColours,
     images: product.images,
-    variants: product.variants.map((variant) => ({
-      id: variant.id,
-      // The schema allows a null size; the admin form requires one, so an
-      // older row without it is surfaced as "Free Size" rather than blank.
-      size: variant.size ?? "Free Size",
-      sku: variant.sku,
-      price: variant.price?.toString() ?? "",
-      stockQty: variant.stockQty,
-    })),
+    stockQty: piece?.stockQty ?? 0,
+    code: piece?.barcode ?? null,
     attributeValueIds: product.attributes.map((link) => link.valueId),
   };
 }
@@ -269,23 +353,26 @@ export async function createProduct(
   /** Whoever is signed in, recorded against the stock this creates. */
   adminId: string,
 ): Promise<string> {
-  await assertUnique({ slug: input.slug, sku: input.sku });
-  await assertVariantSkusFree(input.variants.map((v) => v.sku));
+  await assertUnique({ slug: input.slug });
 
   const product = await db.$transaction(async (tx) => {
+    const groupId = await resolveDesignGroup(tx, {
+      sameDesignAsProductId: input.sameDesignAsProductId,
+    });
+
     const created = await tx.product.create({
       data: {
         name: input.name,
         slug: input.slug,
-        sku: input.sku,
         description: input.description,
         categoryId: input.categoryId,
         mrp: emptyToNull(input.mrp),
         sellingPrice: emptyToNull(input.sellingPrice),
-        isReadymade: input.isReadymade,
         isActive: input.isActive,
         careInstructions: emptyToNull(input.careInstructions),
         silkMarkNumber: emptyToNull(input.silkMarkNumber),
+        colourName: emptyToNull(input.colourName),
+        groupId,
       },
       select: { id: true },
     });
@@ -309,32 +396,30 @@ export async function createProduct(
       })),
     });
 
-    // Created at zero, then the opening stock is ADDED as a movement rather
-    // than written straight into stockQty. Every piece of stock this shop has
-    // must be explainable from the ledger, including the first.
-    const madeVariants = await tx.productVariant.createManyAndReturn({
-      data: input.variants.map((variant) => ({
+    // Exactly one variant, created automatically. Every piece the shop sells is
+    // one size, so there is nothing for the owner to choose.
+    //
+    // Created at zero, then the opening stock is ADDED as a movement rather than
+    // written straight into stockQty. Every piece of stock this shop has must be
+    // explainable from the ledger, including the first.
+    const piece = await tx.productVariant.create({
+      data: {
         productId: created.id,
-        size: variant.size,
-        sku: variant.sku,
-        price: emptyToNull(variant.price),
+        // The piece's price IS the product's selling price. Two prices that are
+        // meant to be equal eventually are not.
+        price: emptyToNull(input.sellingPrice),
         stockQty: 0,
         // Issued here and never changed. A barcode is ink on a tag; reissuing
         // one would invalidate every label already printed.
         barcode: generateBarcode(),
-      })),
-      select: { id: true, sku: true },
+      },
+      select: { id: true },
     });
 
-    const openingBySku = new Map(input.variants.map((v) => [v.sku, v.stockQty]));
-
-    for (const variant of madeVariants) {
-      const opening = openingBySku.get(variant.sku) ?? 0;
-      if (opening === 0) continue;
-
+    if (input.stockQty !== 0) {
       await moveStock(tx, {
-        variantId: variant.id,
-        delta: opening,
+        variantId: piece.id,
+        delta: input.stockQty,
         reason: "OPENING_BALANCE",
         createdById: adminId,
         note: "Entered with the product.",
@@ -367,7 +452,8 @@ export async function updateProduct(
     where: { id },
     select: {
       id: true,
-      variants: { select: { id: true, sku: true } },
+      groupId: true,
+      variants: { orderBy: { barcode: "asc" }, select: { id: true } },
       images: { select: { publicId: true } },
     },
   });
@@ -376,37 +462,12 @@ export async function updateProduct(
     throw new AppError("PRODUCT_NOT_FOUND", "That product no longer exists.", 404);
   }
 
-  await assertUnique({ slug: input.slug, sku: input.sku, exceptProductId: id });
+  await assertUnique({ slug: input.slug, exceptProductId: id });
 
-  const keptIds = new Set(
-    input.variants.map((variant) => variant.id).filter((v): v is string => Boolean(v)),
-  );
-  const removed = existing.variants.filter((variant) => !keptIds.has(variant.id));
-
-  // A variant that appears on a past order cannot be deleted: OrderItem points
-  // at it, and rewriting order history is exactly what spec section 4 forbids.
-  if (removed.length > 0) {
-    const ordered = await db.orderItem.findMany({
-      where: { variantId: { in: removed.map((v) => v.id) } },
-      select: { variant: { select: { sku: true } } },
-      distinct: ["variantId"],
-    });
-
-    if (ordered.length > 0) {
-      throw new AppError(
-        "VARIANT_IN_USE",
-        `These sizes appear on past orders and cannot be removed: ${ordered
-          .map((row) => row.variant.sku)
-          .join(", ")}. Set their stock to 0 instead.`,
-        409,
-      );
-    }
-  }
-
-  await assertVariantSkusFree(
-    input.variants.filter((v) => !v.id).map((v) => v.sku),
-    id,
-  );
+  // The form has no way to add or remove a variant any more, so this NEVER
+  // deletes one. Deleting a variant would cascade its stock movements away, and
+  // the ledger is the shop's only record of where a saree went.
+  const piece = existing.variants[0];
 
   await db.$transaction(async (tx) => {
     await tx.product.update({
@@ -414,15 +475,21 @@ export async function updateProduct(
       data: {
         name: input.name,
         slug: input.slug,
-        sku: input.sku,
         description: input.description,
         categoryId: input.categoryId,
         mrp: emptyToNull(input.mrp),
         sellingPrice: emptyToNull(input.sellingPrice),
-        isReadymade: input.isReadymade,
         isActive: input.isActive,
         careInstructions: emptyToNull(input.careInstructions),
         silkMarkNumber: emptyToNull(input.silkMarkNumber),
+        colourName: emptyToNull(input.colourName),
+        // Self-links are ignored rather than refused: the form shows a sibling,
+        // and a product cannot be a different colour of itself.
+        groupId: await resolveDesignGroup(tx, {
+          sameDesignAsProductId:
+            input.sameDesignAsProductId === id ? null : input.sameDesignAsProductId,
+          currentGroupId: existing.groupId,
+        }),
       },
     });
 
@@ -453,57 +520,49 @@ export async function updateProduct(
       })),
     });
 
-    if (removed.length > 0) {
-      await tx.productVariant.deleteMany({
-        where: { id: { in: removed.map((v) => v.id) } },
+    if (piece) {
+      // The price follows the product's selling price, so the two can never
+      // disagree. The tag code is deliberately not touched: it is ink on a tag.
+      await tx.productVariant.update({
+        where: { id: piece.id },
+        data: { price: emptyToNull(input.sellingPrice) },
       });
-    }
 
-    for (const variant of input.variants) {
-      if (variant.id) {
-        // Everything EXCEPT stock. A count typed into the product form is
-        // still a stock change and still owes the ledger a reason, so it goes
-        // through setStockTo rather than being written here.
-        await tx.productVariant.update({
-          where: { id: variant.id },
-          data: {
-            size: variant.size,
-            sku: variant.sku,
-            price: emptyToNull(variant.price),
-          },
-        });
+      // Stock is NOT written directly. A count typed into the product form is
+      // still a stock change and still owes the ledger a reason.
+      await setStockTo(tx, {
+        variantId: piece.id,
+        newQty: input.stockQty,
+        reason: "ADJUSTMENT",
+        note: "Changed on the product form.",
+        createdById: adminId,
+      });
+    } else {
+      // A product with no variant at all should not exist, but if one does the
+      // fix is to give it the piece it is missing rather than to fail the save.
+      const made = await tx.productVariant.create({
+        data: {
+          productId: id,
+          price: emptyToNull(input.sellingPrice),
+          stockQty: 0,
+          barcode: generateBarcode(),
+        },
+        select: { id: true },
+      });
 
-        await setStockTo(tx, {
-          variantId: variant.id,
-          newQty: variant.stockQty,
-          reason: "ADJUSTMENT",
-          note: "Changed on the product form.",
+      if (input.stockQty !== 0) {
+        await moveStock(tx, {
+          variantId: made.id,
+          delta: input.stockQty,
+          reason: "OPENING_BALANCE",
           createdById: adminId,
+          note: "Piece created for a product that had none.",
         });
-      } else {
-        const made = await tx.productVariant.create({
-          data: {
-            productId: id,
-            size: variant.size,
-            sku: variant.sku,
-            price: emptyToNull(variant.price),
-            stockQty: 0,
-            barcode: generateBarcode(),
-          },
-          select: { id: true },
-        });
-
-        if (variant.stockQty !== 0) {
-          await moveStock(tx, {
-            variantId: made.id,
-            delta: variant.stockQty,
-            reason: "OPENING_BALANCE",
-            createdById: adminId,
-            note: "Size added to an existing product.",
-          });
-        }
       }
     }
+
+    // Unlinking the last colour leaves its set behind with nothing in it.
+    await dropGroupIfEmpty(tx, existing.groupId);
 
     await tx.productAttributeValue.deleteMany({ where: { productId: id } });
 
@@ -523,6 +582,14 @@ export async function updateProduct(
   const orphans = existing.images
     .map((image) => image.publicId)
     .filter((publicId) => !keptPublicIds.has(publicId));
+
+  if (orphans.length === 0) return;
+
+  // Imported here rather than at the top of the file. The ImageKit SDK is
+  // server-only in a way that cannot be loaded outside Next's runtime, and
+  // pulling it in at module load stops this file being used from a script — the
+  // check scripts that prove product writes behave would not run at all.
+  const { destroyImage } = await import("@/lib/imagekit");
 
   await Promise.all(orphans.map(destroyImage));
 }
@@ -545,14 +612,26 @@ export async function deleteProduct(id: string): Promise<{ deleted: boolean }> {
     );
   }
 
-  const images = await db.product
-    .findUnique({ where: { id }, select: { images: { select: { publicId: true } } } })
-    .then((product) => product?.images ?? []);
+  const product = await db.product.findUnique({
+    where: { id },
+    select: { groupId: true, images: { select: { publicId: true } } },
+  });
+
+  const images = product?.images ?? [];
 
   await db.product.delete({ where: { id } });
 
-  // The rows are gone, so nothing references these files any more.
-  await Promise.all(images.map((image) => destroyImage(image.publicId)));
+  // Deleting the last colour of a design leaves its set behind with nothing in
+  // it. A set is only an identity, so an empty one says nothing.
+  await dropGroupIfEmpty(db, product?.groupId ?? null);
+
+  // The rows are gone, so nothing references these files any more. Imported
+  // here for the same reason as above: the ImageKit SDK cannot load outside
+  // Next's runtime.
+  if (images.length > 0) {
+    const { destroyImage } = await import("@/lib/imagekit");
+    await Promise.all(images.map((image) => destroyImage(image.publicId)));
+  }
 
   return { deleted: true };
 }
@@ -572,48 +651,113 @@ function emptyToNull(value: string | undefined): string | null {
 
 async function assertUnique({
   slug,
-  sku,
   exceptProductId,
 }: {
   slug: string;
-  sku: string;
   exceptProductId?: string;
 }): Promise<void> {
   const clash = await db.product.findFirst({
     where: {
-      OR: [{ slug }, { sku }],
+      slug,
       ...(exceptProductId ? { NOT: { id: exceptProductId } } : {}),
     },
-    select: { slug: true, sku: true },
+    select: { slug: true },
   });
 
   if (!clash) return;
 
   throw new AppError(
     "DUPLICATE",
-    clash.slug === slug
-      ? `The web address "${slug}" is already used by another product.`
-      : `SKU "${sku}" is already used by another product.`,
+    `The web address "${slug}" is already used by another product.`,
     409,
   );
 }
 
-async function assertVariantSkusFree(skus: string[], exceptProductId?: string) {
-  if (skus.length === 0) return;
+/**
+ * Works out which design group a product belongs in.
+ *
+ * Colours are separate products on purpose — each is a separate piece on the
+ * shelf with its own tag, cost, stock and photographs. A group records only that
+ * they are the same design, so each one's page can offer the others.
+ *
+ * EVERY COLOUR IN A SET SEES EVERY OTHER. That is why linking two products that
+ * are each already in a set MERGES the two sets rather than moving one product
+ * across. Moving it across would quietly cut it off from the colours it was
+ * linked to before, and the owner would have no way of noticing: the piece they
+ * were looking at would still show a colour, just not all of them.
+ *
+ * Returns null when nothing was pointed at, which is how a colour leaves a set.
+ */
+async function resolveDesignGroup(
+  tx: Prisma.TransactionClient,
+  input: {
+    sameDesignAsProductId: string | null;
+    /** The group this product is in today. Null when it is being created. */
+    currentGroupId?: string | null;
+  },
+): Promise<string | null> {
+  const { sameDesignAsProductId, currentGroupId = null } = input;
 
-  const clash = await db.productVariant.findFirst({
-    where: {
-      sku: { in: skus },
-      ...(exceptProductId ? { NOT: { productId: exceptProductId } } : {}),
-    },
-    select: { sku: true },
+  if (sameDesignAsProductId === null) return null;
+
+  const other = await tx.product.findUnique({
+    where: { id: sameDesignAsProductId },
+    select: { id: true, groupId: true },
   });
 
-  if (clash) {
+  if (!other) {
     throw new AppError(
-      "DUPLICATE",
-      `Size SKU "${clash.sku}" is already used by another product.`,
-      409,
+      "DESIGN_NOT_FOUND",
+      "The piece you linked this colour to no longer exists.",
+      404,
     );
   }
+
+  // Already the same set; nothing to do.
+  if (other.groupId !== null && other.groupId === currentGroupId) return currentGroupId;
+
+  // This piece has a set and the other does not: bring the other in, so the
+  // colours already linked here keep seeing each other.
+  if (currentGroupId !== null && other.groupId === null) {
+    await tx.product.update({ where: { id: other.id }, data: { groupId: currentGroupId } });
+    return currentGroupId;
+  }
+
+  // Both have a set, and they are different sets: merge them into one, so every
+  // colour on both sides ends up seeing every other.
+  if (currentGroupId !== null && other.groupId !== null) {
+    await tx.product.updateMany({
+      where: { groupId: other.groupId },
+      data: { groupId: currentGroupId },
+    });
+    await tx.productGroup.delete({ where: { id: other.groupId } });
+    return currentGroupId;
+  }
+
+  // This piece has no set. Join the other's, or start one and put it in too.
+  if (other.groupId !== null) return other.groupId;
+
+  const group = await tx.productGroup.create({ data: {}, select: { id: true } });
+
+  await tx.product.update({ where: { id: other.id }, data: { groupId: group.id } });
+
+  return group.id;
 }
+
+/**
+ * Removes a design group once its last colour has left it.
+ *
+ * A group is only an identity, so an empty one says nothing and would otherwise
+ * accumulate quietly every time a colour is unlinked.
+ */
+async function dropGroupIfEmpty(
+  tx: Prisma.TransactionClient,
+  groupId: string | null,
+): Promise<void> {
+  if (groupId === null) return;
+
+  const remaining = await tx.product.count({ where: { groupId } });
+
+  if (remaining === 0) await tx.productGroup.delete({ where: { id: groupId } });
+}
+

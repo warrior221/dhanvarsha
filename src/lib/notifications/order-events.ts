@@ -73,7 +73,7 @@ async function notify(orderId: string, kind: OrderEventKind): Promise<void> {
         user: { select: { name: true, email: true } },
         items: {
           // No costPrice: this goes to the customer.
-          select: { productName: true, size: true, price: true, quantity: true },
+          select: { productName: true, price: true, quantity: true },
         },
       },
     });
@@ -91,7 +91,6 @@ async function notify(orderId: string, kind: OrderEventKind): Promise<void> {
       isCod: order.paymentMethod === PaymentMethod.COD,
       items: order.items.map((item) => ({
         name: item.productName,
-        size: item.size,
         quantity: item.quantity,
         // Integer paise; never float (spec 1.4).
         lineTotal: formatInr(

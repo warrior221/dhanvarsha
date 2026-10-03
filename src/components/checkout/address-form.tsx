@@ -95,10 +95,11 @@ export function AddressForm({
   useEffect(() => {
     const pin = values.pincode;
 
-    if (!isCompletePincode(pin)) {
-      setPinStatus("idle");
-      return;
-    }
+    // No setPinStatus here. An incomplete PIN code has nothing in flight and
+    // nothing to report, so "idle" is DERIVED below instead of stored. Setting
+    // it from inside the effect would set state after a render that has already
+    // happened, and start another one for no reason.
+    if (!isCompletePincode(pin)) return;
 
     if (filledFor.current === pin) return;
 
@@ -143,8 +144,21 @@ export function AddressForm({
     };
   }, [values.pincode]);
 
-  /** Fills the address from the browser's location, with the customer's consent. */
-  function useMyLocation() {
+  /**
+   * What the PIN code field says underneath itself.
+   *
+   * Derived, not stored: the moment the PIN code is incomplete there is nothing
+   * to report, whatever the last lookup concluded.
+   */
+  const shownPinStatus = isCompletePincode(values.pincode) ? pinStatus : "idle";
+
+  /**
+   * Fills the address from the browser's location, with the customer's consent.
+   *
+   * NOT named `useLocation`: a `use` prefix is reserved for React hooks, and a
+   * plain function wearing it trips the hook rules for no reason.
+   */
+  function fillFromMyLocation() {
     setLocationError(null);
 
     if (!("geolocation" in navigator)) {
@@ -250,7 +264,7 @@ export function AddressForm({
           variant="outline"
           size="sm"
           disabled={locating}
-          onClick={useMyLocation}
+          onClick={fillFromMyLocation}
         >
           {locating ? (
             <>
@@ -323,11 +337,11 @@ export function AddressForm({
           htmlFor="pincode"
           error={errors.pincode}
           hint={
-            pinStatus === "looking"
+            shownPinStatus === "looking"
               ? "Looking up your city…"
-              : pinStatus === "filled"
+              : shownPinStatus === "filled"
                 ? "City and state filled in — change them if they are wrong."
-                : pinStatus === "unknown"
+                : shownPinStatus === "unknown"
                   ? "We could not look that one up. Please fill in city and state."
                   : "We will fill in your city and state."
           }

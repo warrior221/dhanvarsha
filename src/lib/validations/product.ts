@@ -37,14 +37,6 @@ export const slugSchema = z
     "Use lowercase letters, numbers and hyphens only.",
   );
 
-export const skuSchema = z
-  .string()
-  .trim()
-  .toUpperCase()
-  .min(2, "SKU is too short.")
-  .max(40, "SKU is too long.")
-  .regex(/^[A-Z0-9][A-Z0-9-]*$/, "Use letters, numbers and hyphens only.");
-
 export const productImageSchema = z.object({
   url: z.url("Image URL is not valid."),
   publicId: z.string().trim().min(1),
@@ -55,32 +47,24 @@ export const productImageSchema = z.object({
     .max(200),
 });
 
-export const productVariantSchema = z.object({
-  /** Existing variant id when editing; absent when adding a new one. */
-  id: z.string().trim().min(1).max(64).optional(),
-  /**
-   * Required. A garment cannot be packed without a size, so a product with no
-   * real sizing is recorded explicitly as "Free Size" rather than left blank.
-   */
-  size: z
-    .string()
-    .trim()
-    .min(1, "Every option needs a size. Use “Free Size” if it is one-size.")
-    .max(30),
-  sku: skuSchema,
-  price: optionalMoneySchema,
-  stockQty: z
-    .number()
-    .int("Stock must be a whole number.")
-    .min(0, "Stock cannot be negative.")
-    .max(100_000),
-});
+/**
+ * How many of this piece are in stock.
+ *
+ * NO SIZES. Every piece the shop sells is one size, so a product has exactly
+ * one variant and the form asks for one number. There is no size to choose, no
+ * variant list to manage and no per-size price to keep in step — the piece's
+ * price IS the product's selling price.
+ */
+export const stockQtySchema = z
+  .number()
+  .int("Stock must be a whole number.")
+  .min(0, "Stock cannot be negative.")
+  .max(100_000);
 
 export const productFormSchema = z
   .object({
     name: z.string().trim().min(2, "Give the product a name.").max(200),
     slug: slugSchema,
-    sku: skuSchema,
     description: z
       .string()
       .trim()
@@ -95,8 +79,22 @@ export const productFormSchema = z
     supplierName: z.string().trim().max(200).optional().or(z.literal("")),
     purchaseNote: z.string().trim().max(1000).optional().or(z.literal("")),
 
-    isReadymade: z.boolean().default(false),
     isActive: z.boolean().default(true),
+
+    /**
+     * The colour of THIS entry, e.g. "Royal Blue". Optional: a design the shop
+     * only stocks in one colour needs no label.
+     */
+    colourName: z.string().trim().max(60).optional().or(z.literal("")),
+    /**
+     * Another product this is a colour of.
+     *
+     * Set it and the two join one design group, so each one's page offers the
+     * other colours. Clear it and this piece leaves the group. Colours are
+     * separate products because each is a separate piece on the shelf with its
+     * own tag, cost, stock and photographs.
+     */
+    sameDesignAsProductId: z.string().trim().min(1).max(64).nullable().default(null),
     careInstructions: z.string().trim().max(1000).optional().or(z.literal("")),
     silkMarkNumber: z.string().trim().max(60).optional().or(z.literal("")),
 
@@ -105,9 +103,8 @@ export const productFormSchema = z
       .min(1, "Add at least one photo.")
       .max(8, "Eight photos is the maximum."),
 
-    variants: z
-      .array(productVariantSchema)
-      .min(1, "Add at least one size."),
+    /** Applied to the product's one and only variant. */
+    stockQty: stockQtySchema,
 
     /** AttributeValue ids that are ticked. */
     attributeValueIds: z.array(z.string().trim().min(1)).default([]),
@@ -129,29 +126,10 @@ export const productFormSchema = z
       message: "Selling price cannot be more than the MRP.",
       path: ["sellingPrice"],
     },
-  )
-  // A price on the shop is the variant price; the product's selling price is
-  // what is displayed. Having one without the other would show a shopper a
-  // figure they cannot buy at.
-  .refine(
-    (data) =>
-      data.sellingPrice === "" ||
-      data.variants.every((variant) => variant.price !== ""),
-    {
-      message: "Give every size a price, or clear the selling price to keep this piece off the shop.",
-      path: ["variants"],
-    },
-  )
-  .refine(
-    (data) => new Set(data.variants.map((v) => v.sku)).size === data.variants.length,
-    { message: "Two sizes share the same SKU.", path: ["variants"] },
-  )
-  .refine(
-    (data) =>
-      new Set(data.variants.map((v) => v.size.toLowerCase())).size ===
-      data.variants.length,
-    { message: "The same size is listed twice.", path: ["variants"] },
   );
+// There is no longer a rule about variant prices matching the selling price:
+// the piece's price IS the selling price, written from it on every save, so the
+// two cannot drift apart and there is nothing left to check.
 
 /** Compares money as integer paise, so "999.90" vs "1000" is exact. */
 function comparableMoney(value: string): number {
@@ -160,7 +138,6 @@ function comparableMoney(value: string): number {
 }
 
 export type ProductFormInput = z.infer<typeof productFormSchema>;
-export type ProductVariantInput = z.infer<typeof productVariantSchema>;
 export type ProductImageInput = z.infer<typeof productImageSchema>;
 
 /* ------------------------------------------------------------------ */

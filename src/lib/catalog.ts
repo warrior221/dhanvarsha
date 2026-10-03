@@ -147,7 +147,9 @@ export function buildProductWhere(params: CatalogParams): Prisma.ProductWhereInp
       OR: [
         { name: { contains: term, mode: "insensitive" } },
         { description: { contains: term, mode: "insensitive" } },
-        { sku: { contains: term, mode: "insensitive" } },
+        // The code printed on the tag, so a shopper holding a piece — or ringing
+        // up about one — can find it by the only number it carries.
+        { variants: { some: { barcode: { contains: term, mode: "insensitive" } } } },
         { category: { name: { contains: term, mode: "insensitive" } } },
         // Fabric, occasion, style — so "wedding" or "georgette" works even
         // when the word appears nowhere in the name.

@@ -13,6 +13,7 @@ const LINKS = [
   { href: "/admin/check-in", label: "Check in" },
   { href: "/admin/scan-out", label: "Scan out" },
   { href: "/admin/stock-take", label: "Stock-take" },
+  { href: "/admin/tags", label: "Tag codes" },
   { href: "/admin/inventory", label: "Inventory" },
   { href: "/admin/suppliers", label: "Weavers" },
   { href: "/admin/reports", label: "Reports" },

@@ -4,48 +4,38 @@ import { moneySchema } from "@/lib/validations/product";
 /**
  * A delivery being checked in.
  *
- * One line per design. A saree is one line with a single unsized row; a
- * readymade suit is one line with a row per size, because each size is its own
- * variant with its own stock and its own tag.
+ * One line per design, and one line is one product: every piece the shop sells
+ * is one size, so a line is a name, what it cost and how many arrived. There are
+ * no sizes to list and no per-size rows.
  *
  * Selling price is deliberately absent. The weaver delivers, the owner records
- * what it cost and how many arrived, and prices it later — pricing is what
- * puts a piece on the shop.
+ * what it cost and how many arrived, and prices it later — pricing is what puts a
+ * piece on the shop.
  */
 
-export const purchaseRowSchema = z.object({
-  /** Null for a one-size piece, which is most sarees. */
-  size: z.string().trim().max(30).nullable(),
+export const purchaseLineSchema = z.object({
+  categoryId: z.string().trim().min(1, "Pick a type."),
+  /** Optional. Left blank, it is named after its type and code. */
+  name: z.string().trim().max(200).optional().or(z.literal("")),
+  /** Optional. The colour of this piece, e.g. "Royal Blue". */
+  colourName: z.string().trim().max(60).optional().or(z.literal("")),
+  costPrice: moneySchema,
   quantity: z
     .number()
     .int("Quantity must be a whole number.")
     .min(1, "At least one piece.")
     .max(10_000),
+  images: z
+    .array(
+      z.object({
+        url: z.string().trim().min(1),
+        publicId: z.string().trim().min(1),
+        altText: z.string().trim().max(200).default(""),
+      }),
+    )
+    .max(8)
+    .default([]),
 });
-
-export const purchaseLineSchema = z
-  .object({
-    categoryId: z.string().trim().min(1, "Pick a type."),
-    /** Optional. Left blank, it is named after its type and code. */
-    name: z.string().trim().max(200).optional().or(z.literal("")),
-    /** Cost never varies by size, so it belongs to the line, not the row. */
-    costPrice: moneySchema,
-    rows: z.array(purchaseRowSchema).min(1, "Add at least one size or quantity."),
-    images: z
-      .array(
-        z.object({
-          url: z.string().trim().min(1),
-          publicId: z.string().trim().min(1),
-          altText: z.string().trim().max(200).default(""),
-        }),
-      )
-      .max(8)
-      .default([]),
-  })
-  .refine(
-    (line) => new Set(line.rows.map((row) => row.size ?? "")).size === line.rows.length,
-    { message: "The same size is listed twice.", path: ["rows"] },
-  );
 
 export const purchaseFormSchema = z.object({
   /**

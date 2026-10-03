@@ -1,4 +1,5 @@
 import { normaliseScan } from "@/lib/barcode";
+import type { Prisma } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { setStockTo } from "@/lib/queries/stock";
@@ -43,8 +44,8 @@ export type StocktakeLineView = {
   lineId: string;
   variantId: string | null;
   productName: string;
-  size: string | null;
-  sku: string | null;
+  /** The piece's code, printed on its tag. Null for a tag nobody recognises. */
+  code: string | null;
   scannedCode: string | null;
   countedQty: number;
   expectedQty: number | null;
@@ -122,7 +123,6 @@ export async function openStocktakeId(): Promise<string | null> {
 
 export type CountScanResult = {
   productName: string;
-  size: string | null;
   /** How many of this piece have been counted in this session so far. */
   countedQty: number;
   /** True when the tag matched nothing — worth looking at, not an error. */
@@ -134,8 +134,8 @@ export type CountScanResult = {
 /**
  * Records one piece found on the shelf.
  *
- * Each scan of the same tag adds one, because every piece of a size carries the
- * same tag — three sarees of one design and size means scanning it three times.
+ * Each scan of the same tag adds one, because every piece of a design carries
+ * the same tag — three of one design means scanning it three times.
  *
  * A tag that matches nothing is recorded rather than refused. On a shelf count
  * an unreadable or foreign label is information, and throwing it away would
@@ -162,7 +162,7 @@ export async function countScan(
 
   const variant = await db.productVariant.findUnique({
     where: { barcode: scannedCode },
-    select: { id: true, size: true, product: { select: { name: true } } },
+    select: { id: true, product: { select: { name: true } } },
   });
 
   // Two different keys for the same idea: a known piece is one line per
@@ -189,7 +189,6 @@ export async function countScan(
 
   return {
     productName: variant?.product.name ?? "Unknown tag",
-    size: variant?.size ?? null,
     countedQty: line.countedQty,
     unknownTag: variant === null,
     sessionPieces: total._sum.countedQty ?? 0,
@@ -390,7 +389,7 @@ export async function applyCorrection(
     });
 
     if (!current) {
-      throw new AppError("VARIANT_GONE", "That size no longer exists.", 404);
+      throw new AppError("VARIANT_GONE", "That piece no longer exists.", 404);
     }
 
     if (current.stockQty !== expectedQty) {
@@ -489,13 +488,13 @@ const LINE_SELECT = {
   appliedMovement: { select: { id: true } },
   variant: {
     select: {
-      sku: true,
-      size: true,
+      barcode: true,
       stockQty: true,
       product: { select: { name: true } },
     },
   },
-} as const;
+  // Checked against the schema, so a renamed column fails the build.
+} as const satisfies Prisma.StocktakeLineSelect;
 
 type LineRow = {
   id: string;
@@ -506,8 +505,7 @@ type LineRow = {
   skippedAt: Date | null;
   appliedMovement: { id: string } | null;
   variant: {
-    sku: string;
-    size: string | null;
+    barcode: string;
     stockQty: number;
     product: { name: string };
   } | null;
@@ -518,8 +516,7 @@ function toLineView(row: LineRow): StocktakeLineView {
     lineId: row.id,
     variantId: row.variantId,
     productName: row.variant?.product.name ?? "Unknown tag",
-    size: row.variant?.size ?? null,
-    sku: row.variant?.sku ?? null,
+    code: row.variant?.barcode ?? null,
     scannedCode: row.scannedCode,
     countedQty: row.countedQty,
     expectedQty: row.expectedQty,

@@ -39,11 +39,11 @@ async function main(): Promise<void> {
     const variants = await db.productVariant.findMany({
       select: {
         id: true,
-        sku: true,
+        barcode: true,
         stockQty: true,
         _count: { select: { movements: true } },
       },
-      orderBy: { sku: "asc" },
+      orderBy: { barcode: "asc" },
     });
 
     const needing = variants.filter((variant) => variant._count.movements === 0);
@@ -88,7 +88,7 @@ async function main(): Promise<void> {
 
     for (const variant of mismatched) {
       console.log(
-        `  MISMATCH ${variant.sku}: stockQty ${variant.stockQty}, ledger ${ledger.get(variant.id) ?? 0}`,
+        `  MISMATCH ${variant.barcode}: stockQty ${variant.stockQty}, ledger ${ledger.get(variant.id) ?? 0}`,
       );
     }
 

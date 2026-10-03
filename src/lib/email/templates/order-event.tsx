@@ -22,7 +22,7 @@ export type OrderEventEmailProps = {
   orderUrl: string;
   totalFormatted: string;
   isCod: boolean;
-  items: { name: string; size: string | null; quantity: number; lineTotal: string }[];
+  items: { name: string; quantity: number; lineTotal: string }[];
   courierName?: string | null;
   trackingNumber?: string | null;
 };
@@ -102,7 +102,6 @@ export function OrderEventEmail({
               <Column>
                 <Text style={itemName}>
                   {item.name}
-                  {item.size ? ` · ${item.size}` : ""}
                   {item.quantity > 1 ? ` × ${item.quantity}` : ""}
                 </Text>
               </Column>

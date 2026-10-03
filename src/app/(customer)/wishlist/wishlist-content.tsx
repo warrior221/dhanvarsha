@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { WishlistProductView } from "@/lib/queries/product";
+import { useCartStore } from "@/store/cart-store";
 import { useWishlistStore } from "@/store/wishlist-store";
 
 export function WishlistContent() {
@@ -79,7 +80,12 @@ function WishlistCard({ product }: { product: WishlistProductView }) {
   const removeFromWishlist = useWishlistStore((state) => state.remove);
   const isRemoving = useWishlistStore((state) => state.pending[product.id] ?? false);
 
-  const inStock = product.variants.filter((variant) => variant.stockQty > 0);
+  const addToCart = useCartStore((state) => state.add);
+  const isAdding = useCartStore(
+    (state) => state.pending[product.piece?.id ?? ""] ?? false,
+  );
+
+  const inStock = (product.piece?.stockQty ?? 0) > 0;
 
   return (
     <li className="group flex flex-col">
@@ -94,7 +100,7 @@ function WishlistCard({ product }: { product: WishlistProductView }) {
               className="object-cover transition-transform duration-300 group-hover:scale-105"
             />
           ) : null}
-          {inStock.length === 0 ? (
+          {!inStock ? (
             <div className="absolute inset-0 flex items-center justify-center bg-background/70">
               <span className="rounded-full bg-background px-3 py-1 text-xs font-medium">
                 Sold out
@@ -125,18 +131,24 @@ function WishlistCard({ product }: { product: WishlistProductView }) {
           <Button variant="outline" size="sm" className="flex-1" disabled>
             Not available
           </Button>
-        ) : inStock.length === 0 ? (
+        ) : !inStock || product.piece === null ? (
           <Button variant="outline" size="sm" className="flex-1" disabled>
             Sold out
           </Button>
         ) : (
           /*
-            Saving needs no size, but moving to the bag does — so this always
-            sends the shopper to the product page to choose, rather than
-            picking a size on their behalf.
+            Straight into the bag. There is nothing to choose, so sending the
+            shopper to the product page first would be a step that asks them
+            nothing.
           */
-          <Button asChild size="sm" className="flex-1">
-            <Link href={`/products/${product.slug}`}>Select size</Link>
+          <Button
+            type="button"
+            size="sm"
+            className="flex-1"
+            disabled={isAdding}
+            onClick={() => void addToCart(product.piece!.id, 1)}
+          >
+            {isAdding ? "Adding…" : "Add to bag"}
           </Button>
         )}
 

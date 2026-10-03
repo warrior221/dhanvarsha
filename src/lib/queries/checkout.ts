@@ -346,7 +346,6 @@ async function createOrderTransaction(
             variant: {
               select: {
                 id: true,
-                size: true,
                 price: true,
                 product: {
                   select: {
@@ -397,7 +396,6 @@ async function createOrderTransaction(
         // Snapshots, so editing the product later cannot rewrite this order.
         productName: item.variant.product.name,
         productImage: item.variant.product.images[0]?.url ?? "",
-        size: item.variant.size,
         price,
         costPrice: item.variant.product.cost?.costPrice ?? new Prisma.Decimal(0),
         quantity: item.quantity,
@@ -459,7 +457,7 @@ async function createOrderTransaction(
       } catch {
         throw new AppError(
           "INSUFFICIENT_STOCK",
-          `"${item.variant.product.name}"${item.variant.size ? ` (${item.variant.size})` : ""} just sold out. Please adjust your bag and try again.`,
+          `"${item.variant.product.name}" just sold out. Please adjust your bag and try again.`,
           409,
         );
       }

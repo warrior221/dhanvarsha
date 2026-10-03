@@ -15,9 +15,9 @@ import type { CountScanResult, StocktakeLineView } from "@/lib/queries/stocktake
  * Nothing here changes stock. A count only records what was found; the
  * corrections come later, one at a time, after the owner has read the report.
  *
- * Every piece of a size carries the same tag, so three sarees of one design and
- * size means scanning that tag three times — the number beside the piece is how
- * many have been counted, and the box takes focus back after each scan.
+ * Every saree of one design carries the same tag, so three of them means
+ * scanning that tag three times — the number beside the piece is how many have
+ * been counted, and the box takes focus back after each scan.
  */
 export function CountDesk({
   stocktakeId,
@@ -153,8 +153,7 @@ export function CountDesk({
             <div className="min-w-0 flex-1">
               <p className="font-medium">
                 {last.productName}
-                {last.size ? ` · ${last.size}` : ""}
-              </p>
+                              </p>
               <p className="text-sm text-muted-foreground">
                 {last.unknownTag
                   ? "This tag belongs to nothing in the system. It is recorded so you can look at it later."
@@ -264,8 +263,7 @@ function CountLineRow({
     <li className="flex items-center gap-2 py-2">
       <span className="min-w-0 flex-1 text-sm">
         {line.productName}
-        {line.size ? ` · ${line.size}` : ""}
-        {line.variantId === null ? (
+                {line.variantId === null ? (
           <span className="block font-mono text-xs text-amber-700 dark:text-amber-500">
             {line.scannedCode} — unknown
           </span>

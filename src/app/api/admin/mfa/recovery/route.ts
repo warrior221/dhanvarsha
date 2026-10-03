@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { AppError, apiSuccess, handleApiError } from "@/lib/errors";
-import { useRecoveryCode } from "@/lib/queries/admin-mfa";
+import { redeemRecoveryCode } from "@/lib/queries/admin-mfa";
 import { clientIpFrom, enforceRateLimit } from "@/lib/rate-limit";
 
 const ROUTE = "POST /api/admin/mfa/recovery";
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
 
     const { code } = bodySchema.parse(await request.json());
 
-    await useRecoveryCode(sessionId, userId, code);
+    await redeemRecoveryCode(sessionId, userId, code);
 
     return apiSuccess({ verified: true });
   } catch (error) {

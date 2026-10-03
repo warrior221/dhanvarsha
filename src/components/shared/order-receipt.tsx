@@ -105,11 +105,6 @@ export function OrderReceipt({ receipt }: { receipt: Receipt }) {
             <tr key={index} className="border-b last:border-0">
               <td className="py-3 pr-2">
                 {line.productName}
-                {line.size ? (
-                  <span className="block text-xs text-muted-foreground">
-                    Size {line.size}
-                  </span>
-                ) : null}
               </td>
               <td className="py-3 text-right tabular-nums">{line.unitFormatted}</td>
               <td className="py-3 text-right tabular-nums">{line.quantity}</td>

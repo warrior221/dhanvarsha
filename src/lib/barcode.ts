@@ -3,8 +3,11 @@ import { randomInt } from "node:crypto";
 /**
  * The code printed on a piece's tag and scanned at the counter.
  *
- * NOT the SKU. A SKU is a label the shop writes and may reword; a barcode is
- * ink on a tag tied to a saree in a pile, and the day it changes every tag
+ * THE ONLY CODE A PIECE HAS. There is deliberately no second, made-up product
+ * code: one invented by hand means nothing to anybody, and two codes for one
+ * saree is one more than anyone can keep straight.
+ *
+ * It is ink on a tag tied to a saree in a pile, and the day it changes every tag
  * already printed becomes wrong. So it is generated once, stored, and never
  * edited.
  *

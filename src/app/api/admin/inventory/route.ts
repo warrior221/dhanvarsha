@@ -28,7 +28,7 @@ const bodySchema = z.object({
 });
 
 /**
- * Adjusts the stock on one size to an absolute figure.
+ * Adjusts the stock on one piece to an absolute figure.
  *
  * Not "set the number": the difference is recorded as a stock movement with a
  * reason and a note, in one transaction, because a count that changes with no

@@ -260,7 +260,7 @@ export function CheckoutClient({
               <div className="min-w-0 flex-1">
                 <p className="line-clamp-2">{item.product.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  {item.size ? `Size ${item.size} · ` : ""}Qty {item.quantity}
+                  Qty {item.quantity}
                 </p>
               </div>
               <p className="shrink-0 tabular-nums">{formatInr(item.lineTotal)}</p>

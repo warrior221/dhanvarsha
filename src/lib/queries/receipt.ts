@@ -21,7 +21,6 @@ import { getTaxSettings } from "@/lib/queries/settings";
 
 export type ReceiptLine = {
   productName: string;
-  size: string | null;
   quantity: number;
   unitFormatted: string;
   lineTotalFormatted: string;
@@ -96,7 +95,7 @@ export async function getReceipt(
       },
       items: {
         // NOTE: costPrice is deliberately absent.
-        select: { productName: true, size: true, price: true, quantity: true },
+        select: { productName: true, price: true, quantity: true },
       },
     },
   });
@@ -127,7 +126,6 @@ export async function getReceipt(
 
       return {
         productName: item.productName,
-        size: item.size,
         quantity: item.quantity,
         unitFormatted: formatInr(item.price.toString()),
         lineTotalFormatted: formatInr(((unit * item.quantity) / 100).toFixed(2)),

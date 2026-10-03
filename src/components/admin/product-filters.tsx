@@ -56,13 +56,13 @@ export function AdminProductFilters({
       <form onSubmit={onSearch} className="flex gap-2" role="search">
         <div>
           <Label htmlFor="admin-q" className="sr-only">
-            Search by name or SKU
+            Search by name or code
           </Label>
           <Input
             id="admin-q"
             name="q"
             type="search"
-            placeholder="Name or SKU…"
+            placeholder="Name or code…"
             defaultValue={searchParams.get("q") ?? ""}
             className="w-56"
           />

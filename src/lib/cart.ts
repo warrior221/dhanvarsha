@@ -13,7 +13,6 @@ import type { WishlistProductView } from "@/lib/queries/product";
 export type CartItemView = {
   variantId: string;
   quantity: number;
-  size: string | null;
   stockQty: number;
   unitPrice: string;
   lineTotal: string;
@@ -21,7 +20,6 @@ export type CartItemView = {
     id: string;
     name: string;
     slug: string;
-    sku: string;
     image: { url: string; altText: string } | null;
   };
 };

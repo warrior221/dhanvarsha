@@ -91,7 +91,7 @@ export default async function UnpricedProductsPage(
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">{product.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  {product.categoryName} · {product.sku} · added{" "}
+                  {product.categoryName} · {product.code ?? "no code"} · added{" "}
                   {ADDED.format(new Date(product.createdAt))}
                 </p>
               </div>

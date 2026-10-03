@@ -8,7 +8,7 @@ import { AttributeInputType, PrismaClient } from "../src/generated/prisma";
  * Run with: npx prisma db seed
  *
  * This file is re-runnable. Everything is keyed off a natural unique column
- * (slug or sku) and upserted, so running it twice updates rows rather than
+ * (its web address) and upserted, so running it twice updates rows rather than
  * creating duplicates.
  *
  * NOTE ON IMAGES: the image URLs below are placeholders so the catalog has
@@ -62,29 +62,39 @@ type AttributeSeed = {
   values: { value: string; slug: string; position: number }[];
 };
 
-type VariantSeed = {
-  size: string | null;
-  sku: string;
+/**
+ * The one piece a product is.
+ *
+ * No size: every piece the shop sells is one size, so each product has exactly
+ * one variant. Kept as its own type because it still carries its own code and
+ * stock.
+ */
+type PieceSeed = {
+  /**
+   * THE code, printed on the tag. Fixed here rather than random so re-seeding
+   * never issues a second code for the same piece.
+   */
+  code: string;
   /** Decimal as a string — never a JS number, which would round through float. */
   price: string;
   stockQty: number;
 };
 
 type ProductSeed = {
-  sku: string;
   name: string;
   slug: string;
   description: string;
   categorySlug: string;
   mrp: string;
   sellingPrice: string;
-  isReadymade: boolean;
+  /** Optional. Different colours of one design are separate products. */
+  colourName?: string;
   careInstructions: string;
   cost: { costPrice: string; supplierName: string; purchaseNote?: string };
   /** Attribute value slugs, as "<attribute-slug>:<value-slug>". */
   attributes: string[];
   imageCount: number;
-  variants: VariantSeed[];
+  piece: PieceSeed;
 };
 
 /* ------------------------------------------------------------------ */
@@ -149,7 +159,6 @@ const attributes: AttributeSeed[] = [
 
 const products: ProductSeed[] = [
   {
-    sku: "SR-KJV-001",
     name: "Kanjeevaram Silk Saree in Deep Maroon",
     slug: "kanjeevaram-silk-saree-deep-maroon",
     description:
@@ -157,7 +166,6 @@ const products: ProductSeed[] = [
     categorySlug: "saree",
     mrp: "12999.00",
     sellingPrice: "8999.00",
-    isReadymade: false,
     careInstructions: "Dry clean only. Store folded in a cotton cloth.",
     cost: {
       costPrice: "5500.00",
@@ -171,10 +179,9 @@ const products: ProductSeed[] = [
       "style:kanjeevaram",
     ],
     imageCount: 5,
-    variants: [{ size: null, sku: "SR-KJV-001-FS", price: "8999.00", stockQty: 6 }],
+    piece: { code: "DVSEEDKJV01", price: "8999.00", stockQty: 6 },
   },
   {
-    sku: "SR-BNS-002",
     name: "Banarasi Silk Saree in Royal Blue",
     slug: "banarasi-silk-saree-royal-blue",
     description:
@@ -182,7 +189,6 @@ const products: ProductSeed[] = [
     categorySlug: "saree",
     mrp: "9999.00",
     sellingPrice: "6499.00",
-    isReadymade: false,
     careInstructions: "Dry clean only. Avoid direct sunlight.",
     cost: {
       costPrice: "4000.00",
@@ -195,10 +201,9 @@ const products: ProductSeed[] = [
       "style:banarasi",
     ],
     imageCount: 4,
-    variants: [{ size: null, sku: "SR-BNS-002-FS", price: "6499.00", stockQty: 9 }],
+    piece: { code: "DVSEEDBNS02", price: "6499.00", stockQty: 9 },
   },
   {
-    sku: "SR-GRG-003",
     name: "Georgette Party Saree in Emerald Green",
     slug: "georgette-party-saree-emerald-green",
     description:
@@ -206,7 +211,6 @@ const products: ProductSeed[] = [
     categorySlug: "saree",
     mrp: "4999.00",
     sellingPrice: "2999.00",
-    isReadymade: false,
     careInstructions: "Hand wash cold, or dry clean. Do not wring.",
     cost: {
       costPrice: "1600.00",
@@ -214,10 +218,9 @@ const products: ProductSeed[] = [
     },
     attributes: ["occasion:party", "fabric:georgette", "style:embroidered"],
     imageCount: 4,
-    variants: [{ size: null, sku: "SR-GRG-003-FS", price: "2999.00", stockQty: 14 }],
+    piece: { code: "DVSEEDGRG03", price: "2999.00", stockQty: 14 },
   },
   {
-    sku: "LH-BRD-004",
     name: "Bridal Lehenga in Crimson Velvet",
     slug: "bridal-lehenga-crimson-velvet",
     description:
@@ -225,7 +228,6 @@ const products: ProductSeed[] = [
     categorySlug: "lehenga",
     mrp: "45999.00",
     sellingPrice: "32999.00",
-    isReadymade: true,
     careInstructions: "Dry clean only. Hang on a padded hanger to keep the flare.",
     cost: {
       costPrice: "21000.00",
@@ -234,14 +236,9 @@ const products: ProductSeed[] = [
     },
     attributes: ["occasion:wedding", "fabric:velvet", "style:embroidered"],
     imageCount: 5,
-    variants: [
-      { size: "S", sku: "LH-BRD-004-S", price: "32999.00", stockQty: 2 },
-      { size: "M", sku: "LH-BRD-004-M", price: "32999.00", stockQty: 3 },
-      { size: "L", sku: "LH-BRD-004-L", price: "32999.00", stockQty: 2 },
-    ],
+piece: { code: "DVSEEDBRD04", price: "32999.00", stockQty: 2 },
   },
   {
-    sku: "ST-CTN-005",
     name: "Cotton Straight Suit Set in Indigo Block Print",
     slug: "cotton-straight-suit-set-indigo-block-print",
     description:
@@ -249,7 +246,6 @@ const products: ProductSeed[] = [
     categorySlug: "suit",
     mrp: "3499.00",
     sellingPrice: "2199.00",
-    isReadymade: true,
     careInstructions: "Machine wash cold, separately for the first two washes.",
     cost: {
       costPrice: "1200.00",
@@ -257,12 +253,7 @@ const products: ProductSeed[] = [
     },
     attributes: ["occasion:casual", "fabric:cotton", "style:printed"],
     imageCount: 4,
-    variants: [
-      { size: "S", sku: "ST-CTN-005-S", price: "2199.00", stockQty: 8 },
-      { size: "M", sku: "ST-CTN-005-M", price: "2199.00", stockQty: 12 },
-      { size: "L", sku: "ST-CTN-005-L", price: "2199.00", stockQty: 10 },
-      { size: "XL", sku: "ST-CTN-005-XL", price: "2199.00", stockQty: 4 },
-    ],
+    piece: { code: "DVSEEDCTN05", price: "2199.00", stockQty: 10 },
   },
 ];
 
@@ -374,25 +365,23 @@ async function main(): Promise<void> {
     const saved = await db.product.upsert({
       where: { slug: product.slug },
       update: {
-        sku: product.sku,
         name: product.name,
         description: product.description,
         categoryId: category.id,
         mrp: product.mrp,
         sellingPrice: product.sellingPrice,
-        isReadymade: product.isReadymade,
+        colourName: product.colourName ?? null,
         careInstructions: product.careInstructions,
         isActive: true,
       },
       create: {
-        sku: product.sku,
         name: product.name,
         slug: product.slug,
         description: product.description,
         categoryId: category.id,
         mrp: product.mrp,
         sellingPrice: product.sellingPrice,
-        isReadymade: product.isReadymade,
+        colourName: product.colourName ?? null,
         careInstructions: product.careInstructions,
         isActive: true,
       },
@@ -426,60 +415,63 @@ async function main(): Promise<void> {
       })),
     });
 
-    // Variants — upserted by SKU so stock edits are not clobbered on re-run.
+    // The one piece.
     //
-    // A NEW variant is created empty and then given its stock as an
+    // Found by PRODUCT, not by code: a product has exactly one piece, and the
+    // piece already in the database keeps the code it was issued, whatever this
+    // file says. A tag code is ink on a tag — re-seeding must never hand a piece
+    // a second one.
+    //
+    // A NEW piece is created empty and then given its stock as an
     // OPENING_BALANCE movement, so the ledger can account for every piece the
-    // shop has, including seeded ones. An EXISTING variant is left alone: its
-    // stock belongs to the ledger by then, and overwriting it here would put
-    // the two permanently out of step.
+    // shop has, including seeded ones. An EXISTING one is left alone: its stock
+    // belongs to the ledger by then, and overwriting it here would put the two
+    // permanently out of step.
     //
     // Written directly rather than through moveStock() because the seed runs
     // outside the app and must not depend on its module aliases. It still does
     // both halves, which is the rule that matters.
-    for (const variant of product.variants) {
-      const existing = await db.productVariant.findUnique({
-        where: { sku: variant.sku },
-        select: { id: true },
-      });
+    const piece = product.piece;
 
-      const savedVariant = await db.productVariant.upsert({
-        where: { sku: variant.sku },
-        update: {
-          size: variant.size,
-          price: variant.price,
-          productId: saved.id,
-        },
-        create: {
-          productId: saved.id,
-          size: variant.size,
-          sku: variant.sku,
-          price: variant.price,
-          stockQty: 0,
-          // Deterministic from the SKU so re-seeding does not reissue codes.
-          // Real stock gets a random one; seed data only has to be unique.
-          barcode: `DVSEED${variant.sku.replace(/[^A-Z0-9]/g, "").slice(-5)}`,
-        },
-        select: { id: true },
-      });
+    const existing = await db.productVariant.findFirst({
+      where: { productId: saved.id },
+      orderBy: { barcode: "asc" },
+      select: { id: true },
+    });
 
-      if (!existing && variant.stockQty !== 0) {
-        await db.$transaction([
-          db.productVariant.update({
-            where: { id: savedVariant.id },
-            data: { stockQty: variant.stockQty },
-          }),
-          db.stockMovement.create({
-            data: {
-              variantId: savedVariant.id,
-              delta: variant.stockQty,
-              balanceAfter: variant.stockQty,
-              reason: "OPENING_BALANCE",
-              note: "Seeded.",
-            },
-          }),
-        ]);
-      }
+    const savedVariant = existing
+      ? await db.productVariant.update({
+          where: { id: existing.id },
+          // Not the code: that stays as issued.
+          data: { price: piece.price },
+          select: { id: true },
+        })
+      : await db.productVariant.create({
+          data: {
+            productId: saved.id,
+            price: piece.price,
+            stockQty: 0,
+            barcode: piece.code,
+          },
+          select: { id: true },
+        });
+
+    if (!existing && piece.stockQty !== 0) {
+      await db.$transaction([
+        db.productVariant.update({
+          where: { id: savedVariant.id },
+          data: { stockQty: piece.stockQty },
+        }),
+        db.stockMovement.create({
+          data: {
+            variantId: savedVariant.id,
+            delta: piece.stockQty,
+            balanceAfter: piece.stockQty,
+            reason: "OPENING_BALANCE",
+            note: "Seeded.",
+          },
+        }),
+      ]);
     }
 
     // Attribute links.
@@ -499,8 +491,8 @@ async function main(): Promise<void> {
     }
   }
 
-  const variantCount = products.reduce((n, p) => n + p.variants.length, 0);
-  console.log(`  products:   ${products.length} (${variantCount} variants)`);
+  const pieces = products.reduce((n, p) => n + p.piece.stockQty, 0);
+  console.log(`  products:   ${products.length} (${pieces} pieces in stock)`);
   console.log("\nSeeding complete.");
 }
 

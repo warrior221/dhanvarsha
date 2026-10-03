@@ -209,6 +209,132 @@ whole order rather than silently charging less for fewer pieces. The admin form
 accepts a blank price, and refuses a half-priced state where the product has a
 selling price but a size does not.
 
+## 3f. One size, one piece, and colours (30 September 2026)
+
+The owner sells nothing readymade and nothing in sizes: **every product is one
+piece, free size.** So a product has exactly ONE variant, created automatically
+when the product is added.
+
+- **No size anywhere a customer or the owner can see.** No picker on the product
+  page, none in the bag, none at checkout, no size field and no readymade toggle
+  in the admin form. The form asks for one number — how many are in stock.
+- The one variant carries the product's own SKU, an auto-issued tag code, and a
+  price written from the product's selling price on every save. Two prices meant
+  to be equal eventually are not, so there is now only one place to set it.
+- `ProductVariant.size` and `Product.isReadymade` remain in the database, always
+  null and false. They are NOT dropped: `OrderItem.size` is a snapshot on past
+  orders, and an old receipt must still print the size it was placed with. Order
+  history is never rewritten.
+- The product form can no longer create or delete a variant, so `updateProduct`
+  **never deletes one**. Deleting a variant would cascade its stock movements
+  away, and the ledger is the only record of where a saree went.
+- The two placeholder products that still carried sizes were collapsed on
+  30 September 2026 with `npx tsx scripts/collapse-legacy-sizes.ts --apply`,
+  after the owner confirmed the catalogue is test data. The script moves each
+  extra size's stock onto the piece that sells THROUGH THE LEDGER — one movement
+  out, one in, both explained — then deletes the extra size. It is a dry run
+  unless `--apply` is passed, and it is safe to run again.
+
+  `LH-BRD-004-M` could not be removed at first because a past order pointed at
+  it, and an order line pointing at nothing is rewritten history. The owner then
+  confirmed the whole catalogue is development data, so that ONE TEST ORDER
+  (`DV-260919-GJR44`, three bridal lehengas, placed by the owner's own account on
+  19 September 2026) was deleted and the size went with it. Its stock movement
+  survives with its order link cleared, because deleting an order must not delete
+  the record of stock having moved.
+
+  **The rule itself has not changed**: nothing deletes a variant that a real
+  order points at, and `scripts/collapse-legacy-sizes.ts` still refuses to. This
+  was a deliberate one-off on data the owner confirmed was disposable.
+
+  Every product now has exactly one piece and no size label anywhere; the ledger
+  reconciles 5/5.
+
+### One code per piece (3 October 2026)
+
+**`Product.sku` and `ProductVariant.sku` are gone.** A piece has ONE code, the
+one printed on its tag: `ProductVariant.barcode`, now `NOT NULL` and unique.
+
+The owner put it plainly: *"no use of making up a code that is useless."* They
+were right. A `SAR-7K2PX` invented by the shop told nobody anything the tag code
+did not already say, and two codes for one saree is one more than anyone can keep
+straight. `src/lib/sku.ts` and `freeSku()` were deleted the day after they were
+written, along with `scripts/backfill-barcodes.ts`, which cannot be needed now
+that the column is required.
+
+What that code is used for now: shown on the product page and the admin list,
+searched for by both the shop and the admin, sorted by wherever a deterministic
+order is needed, and read by the scanner. It is issued once by `generateBarcode()`
+and never reissued.
+
+The product form shows it **read-only**, because there is nothing to decide. A
+product is still found by its web address (`slug`), which is derived from the name
+and is the only thing uniqueness is checked on.
+
+`OrderItem` keeps its own `productName` and `price` snapshots.
+
+### Sizes are gone from the database too (3 October 2026)
+
+`ProductVariant.size`, `Product.isReadymade` and `OrderItem.size` are **dropped**.
+They had been kept so that a past order could still print the size it was placed
+with; the owner then confirmed there are no real orders and will not be until the
+site is deployed, and with one size forever the columns could only ever hold null.
+A dead column that can never fill is a question someone has to answer later for
+nothing.
+
+Checked before dropping: 0 pieces carried a size, 0 order lines carried a size.
+
+**One bug this caught.** `src/lib/queries/cart.ts` still selected
+`ProductVariant.size`. Its select is `as const` but not `satisfies
+Prisma.CartItemSelect`, so TypeScript never checked it against the schema and the
+build stayed green — the bag would have thrown at runtime for every shopper. The
+read paths are now exercised by a script rather than trusted to the compiler:
+bag, customer orders, admin orders, tag codes, stock-takes, scan-out and restock
+all run against the real database.
+
+### Colours
+
+Different colours of one design are **separate products**, linked by a
+`ProductGroup`. Each colour is a separate piece on the shelf with its own tag,
+cost, stock and photographs — which is exactly what a separate product is. A
+group holds nothing but an identity; it only records that two entries are the
+same design.
+
+- The admin form has a colour name and a "Same design as" search. Pointing at a
+  piece that is already linked joins the whole set, so a third and fourth colour
+  can each be linked to whichever one is easiest to find. Clearing it unlinks.
+- **Every colour in a set sees every other**, in all directions. Linking two
+  pieces that each already belong to a set MERGES the two sets rather than moving
+  one piece across. Moving it across would quietly cut it off from the colours it
+  was linked to before, and nobody would notice: the page would still show a
+  colour, just not all of them. Verified with a chain of four, a separate pair,
+  one link between them, and an unlink.
+- An empty set is deleted when its last colour leaves or is deleted. A set is
+  only an identity, so an empty one says nothing.
+
+**Checking it:** `npx tsx scripts/check-colours.ts` creates its own throwaway
+colours, asserts twenty-two things about them and removes them again, touching
+nothing that was already there and exiting non-zero on failure. It covers the
+cases that look fine on screen when they are wrong: a colour seeing only part of
+its set, an unpriced or switched-off colour being offered, a sold-out one being
+hidden, and a set left behind empty.
+
+`--demo` leaves three linked colours in the shop at four, one and zero in stock —
+every state the colour row can show — and `--remove-demo` takes them away again.
+They were added on 30 September 2026 and should be removed before the real
+catalogue goes in.
+- The product page shows the colours beside **Add to bag**, as links to those
+  products: the page changes, the price and photographs change with it, and
+  nothing has to pretend one product holds stock it does not.
+- Sold-out colours are still offered, struck through and labelled — hiding them
+  would make a design look thinner than it is. Unpriced or hidden colours are
+  filtered out by the same visibility rule as any other listing.
+
+A grid tile now counts the one piece's stock rather than summing variants, so a
+tile and its product page can never disagree about whether something is in stock.
+
+---
+
 ## 3c. Pricing and availability rules
 
 From the owner, 29 September 2026. These are settled.
@@ -261,7 +387,27 @@ past purchase lines keep the cost they were bought at. (Phase 2.)
    Pricing IS the approval. A piece with an MRP and a selling price is on the
    shop; clear either and it comes off. No `isListedOnline` flag was added —
    two ways of saying the same thing eventually disagree.
-3. **Weighted average on restock** (§3c), as part of Phase 2. Still to build.
+3. ~~**Weighted average on restock**~~ — **BUILT** 30 September 2026.
+   `src/lib/queries/restock.ts`, `/api/admin/restock`, and a second tab on the
+   check-in screen: "More of something I have". Search by scanning the tag on
+   the piece in hand — two seasons of one design often share a name, and only
+   the tag cannot land on the wrong one.
+
+   `weightedAverageCost()` blends the old cost with the batch's by how many
+   pieces each represents, in whole paise, rounded to the nearest paise at the
+   end. With nothing on hand there is nothing to blend — everything the old cost
+   described has been sold — so the batch cost simply becomes the cost.
+
+   **Only `ProductCost.costPrice` moves.** The `unitCost` on every earlier
+   purchase line, the `costPrice` snapshot on every past order item (so last
+   month's profit does not change because of a delivery today), and every stock
+   movement already written all stay exactly as they were. Restocks are numbered
+   `R-0001` upwards, separately from `P-` deliveries of new designs.
+
+   `ProductCost.supplierId` is only filled in when the product had none.
+   A product's supplier means "who usually supplies this", and overwriting it
+   because one batch came from someone else would lose that. Which weaver
+   supplied a particular batch is on the purchase record, where it is accurate.
 
 A customer's only route to an unpriced piece is a wishlist they had already
 saved it to, where it reads "Not available" with the button disabled. The shop
@@ -269,12 +415,14 @@ grid, the product page, search and the sitemap all hide it.
 
 ## 3b. Still to settle
 
-**Per-variant or per-product cost.** `ProductCost` is `productId @unique` —
-one cost row per product. But `PurchaseItem` is sketched with `variantId` and
-`unitCost`, and restocking is described as changing "the variant's current
-cost". There is no per-variant cost today. Either `ProductCost` moves to
-per-variant, or the purchase model changes. It is a migration either way, and
-it blocks Phase 2.
+**~~Per-variant or per-product cost.~~ SETTLED: per product.** The owner's rule
+— *"cost will never be different for different size"* — decides it. `ProductCost`
+stays `productId @unique`, and **no migration is needed**. `PurchaseItem.unitCost`
+is per variant only because a delivery counts pieces per size; it is a snapshot
+of what that batch cost, not a second cost price to keep in step. Both the
+check-in form and the restock form therefore put cost on the LINE and quantity
+on the ROWS, so the rule holds by the shape of the form rather than by a check
+someone could forget.
 
 **Phase 1's surface is five writes, not three.** Every place `stockQty` is
 written today:

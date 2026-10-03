@@ -34,7 +34,7 @@ export function ScanOutDesk({ initialScans }: { initialScans: ScanRecord[] }) {
   const [busy, setBusy] = useState(false);
   const [last, setLast] = useState<{ piece: ScannedPiece; remaining: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [session, setSession] = useState<{ name: string; size: string | null }[]>([]);
+  const [session, setSession] = useState<{ name: string }[]>([]);
 
   // The box must be ready the moment the page opens, and again after every
   // scan — a scanner types wherever the focus happens to be.
@@ -57,10 +57,7 @@ export function ScanOutDesk({ initialScans }: { initialScans: ScanRecord[] }) {
       );
 
       setLast(result);
-      setSession((all) => [
-        { name: result.piece.productName, size: result.piece.size },
-        ...all,
-      ]);
+      setSession((all) => [{ name: result.piece.productName }, ...all]);
       router.refresh();
     } catch (err) {
       setLast(null);
@@ -156,8 +153,7 @@ export function ScanOutDesk({ initialScans }: { initialScans: ScanRecord[] }) {
                 {last.piece.productName}
               </p>
               <p className="text-sm text-muted-foreground">
-                {last.piece.size ? `Size ${last.piece.size} · ` : ""}
-                {last.piece.sku}
+                <span className="font-mono">{last.piece.barcode}</span>
               </p>
             </div>
 
@@ -179,8 +175,7 @@ export function ScanOutDesk({ initialScans }: { initialScans: ScanRecord[] }) {
               {session.map((item, index) => (
                 <li key={index}>
                   {item.name}
-                  {item.size ? ` · ${item.size}` : ""}
-                </li>
+                                  </li>
               ))}
             </ul>
           </div>
@@ -205,8 +200,7 @@ export function ScanOutDesk({ initialScans }: { initialScans: ScanRecord[] }) {
                     }
                   >
                     {record.productName}
-                    {record.size ? ` · ${record.size}` : ""}
-                  </p>
+                                      </p>
                   <p className="text-xs text-muted-foreground">
                     {TIME.format(new Date(record.at))}
                     {record.by ? ` · ${record.by}` : ""}

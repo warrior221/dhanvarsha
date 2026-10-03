@@ -1,3 +1,4 @@
+import type { Prisma } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import type { AddressInput } from "@/lib/validations/checkout";
@@ -37,7 +38,8 @@ const addressSelect = {
   pincode: true,
   phone: true,
   isDefault: true,
-} as const;
+  // Checked against the schema, so a renamed column fails the build.
+} as const satisfies Prisma.AddressSelect;
 
 export async function listAddresses(userId: string): Promise<AddressView[]> {
   return db.address.findMany({

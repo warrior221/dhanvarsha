@@ -18,8 +18,6 @@ export type ScannedPiece = {
   variantId: string;
   barcode: string;
   productName: string;
-  size: string | null;
-  sku: string;
   stockQty: number;
   /** Null when the piece has not been priced, which is fine for scanning out. */
   sellingPrice: string | null;
@@ -34,8 +32,6 @@ export async function lookupByBarcode(raw: string): Promise<ScannedPiece> {
     where: { barcode },
     select: {
       id: true,
-      size: true,
-      sku: true,
       stockQty: true,
       barcode: true,
       price: true,
@@ -61,8 +57,6 @@ export async function lookupByBarcode(raw: string): Promise<ScannedPiece> {
     variantId: variant.id,
     barcode: variant.barcode,
     productName: variant.product.name,
-    size: variant.size,
-    sku: variant.sku,
     stockQty: variant.stockQty,
     // The variant price is what a customer would pay; the product's is display.
     sellingPrice: variant.price?.toString() ?? variant.product.sellingPrice?.toString() ?? null,
@@ -111,8 +105,7 @@ export type ScanRecord = {
   movementId: string;
   at: string;
   productName: string;
-  size: string | null;
-  barcode: string | null;
+  code: string;
   by: string | null;
   undone: boolean;
 };
@@ -134,7 +127,6 @@ export async function todaysScans(): Promise<ScanRecord[]> {
       reversedBy: { select: { id: true } },
       variant: {
         select: {
-          size: true,
           barcode: true,
           product: { select: { name: true } },
         },
@@ -146,8 +138,7 @@ export async function todaysScans(): Promise<ScanRecord[]> {
     movementId: row.id,
     at: row.createdAt.toISOString(),
     productName: row.variant.product.name,
-    size: row.variant.size,
-    barcode: row.variant.barcode,
+    code: row.variant.barcode,
     by: row.createdBy?.name ?? row.createdBy?.email ?? null,
     undone: row.reversedBy !== null,
   }));

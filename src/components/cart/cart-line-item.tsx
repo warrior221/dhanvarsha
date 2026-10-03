@@ -50,10 +50,9 @@ export function CartLineItem({
           {item.product.name}
         </Link>
 
-        {item.size ? (
-          <p className="text-xs text-muted-foreground">Size {item.size}</p>
-        ) : null}
-
+        {/* No size line: every piece is one size, so there is nothing to
+            repeat back. Past ORDERS still print the size they were placed with,
+            because order history is never rewritten. */}
         <p className="text-xs text-muted-foreground">
           {formatInr(item.unitPrice)} each
         </p>

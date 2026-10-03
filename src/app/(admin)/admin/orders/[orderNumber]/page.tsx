@@ -85,7 +85,6 @@ export default async function AdminOrderDetailPage(
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">{item.productName}</p>
                     <p className="text-xs text-muted-foreground">
-                      {item.size ? `Size ${item.size} · ` : ""}
                       {item.priceFormatted} × {item.quantity}
                     </p>
                     {/* Admin only: never rendered on a customer page. */}

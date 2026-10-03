@@ -47,7 +47,7 @@ export default async function EditProductPage(
           ← Back to products
         </Link>
         <h1 className="mt-2 text-2xl font-semibold">{product.name}</h1>
-        <p className="text-sm text-muted-foreground">SKU {product.sku}</p>
+        <p className="font-mono text-sm text-muted-foreground">{product.code}</p>
       </div>
 
       <ProductForm

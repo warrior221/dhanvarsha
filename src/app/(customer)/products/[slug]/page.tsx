@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SilkMark } from "@/components/shop/silk-mark";
 import { ProductGallery } from "@/components/product/product-gallery";
+import { ColourSwitcher } from "@/components/product/colour-switcher";
 import { ProductActions } from "@/components/product/product-actions";
 import { Price } from "@/components/shared/price";
 import { Badge } from "@/components/ui/badge";
@@ -52,7 +53,7 @@ export default async function ProductDetailPage(
 
   if (!product) notFound();
 
-  const inStock = product.variants.some((variant) => variant.stockQty > 0);
+  const inStock = (product.piece?.stockQty ?? 0) > 0;
 
   // Group attribute values under their attribute for display.
   const grouped = new Map<string, { name: string; values: string[] }>();
@@ -70,7 +71,7 @@ export default async function ProductDetailPage(
     "@type": "Product",
     name: product.name,
     description: product.description,
-    sku: product.sku,
+    sku: product.piece?.code ?? undefined,
     image: product.images.map((image) => image.url),
     category: product.category.name,
     offers: {
@@ -121,17 +122,26 @@ export default async function ProductDetailPage(
           <div className="space-y-2">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">
               {product.category.name}
-              {product.isReadymade ? " · Readymade" : ""}
             </p>
             <h1 className="text-2xl font-semibold sm:text-3xl">{product.name}</h1>
-            <p className="text-xs text-muted-foreground">SKU {product.sku}</p>
+            <p className="text-xs text-muted-foreground">
+              {product.colourName ?? ""}
+              {product.colourName && product.piece ? " · " : ""}
+              {product.piece ? <span className="font-mono">{product.piece.code}</span> : null}
+            </p>
           </div>
 
           <Price mrp={product.mrp} sellingPrice={product.sellingPrice} size="lg" />
 
           <Separator />
 
-          <ProductActions productId={product.id} variants={product.variants} />
+          <ColourSwitcher
+            currentColourName={product.colourName}
+            currentName={product.name}
+            colours={product.colours}
+          />
+
+          <ProductActions productId={product.id} piece={product.piece} />
 
           <Separator />
 

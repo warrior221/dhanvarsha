@@ -23,14 +23,13 @@ export default async function AdminInventoryPage() {
   await requireAdminPage();
 
   const variants = await db.productVariant.findMany({
-    orderBy: [{ stockQty: "asc" }, { sku: "asc" }],
+    orderBy: [{ stockQty: "asc" }, { barcode: "asc" }],
     select: {
       id: true,
-      sku: true,
-      size: true,
       stockQty: true,
+      barcode: true,
       product: {
-        select: { id: true, name: true, sku: true, isActive: true },
+        select: { id: true, name: true, isActive: true },
       },
     },
   });
@@ -43,14 +42,19 @@ export default async function AdminInventoryPage() {
       <div>
         <h1 className="text-2xl font-semibold">Inventory</h1>
         <p className="text-sm text-muted-foreground">
-          {variants.length} sizes across all products. Sorted lowest stock first.
+          {variants.length} pieces, lowest stock first. The code is the one
+          printed on the tag and scanned at the counter — it is the only code a
+          piece has. <Link href="/admin/tags" className="underline">
+            Copy them as text
+          </Link>{" "}
+          when you need to print.
         </p>
       </div>
 
       <div className="flex flex-wrap gap-3">
         <SummaryCard label="Sold out" value={soldOut} tone="plain" />
         <SummaryCard label="Pieces in stock" value={pieces} tone="plain" />
-        <SummaryCard label="Total sizes" value={variants.length} tone="plain" />
+        <SummaryCard label="Pieces listed" value={variants.length} tone="plain" />
       </div>
 
       {variants.length === 0 ? (
@@ -64,8 +68,7 @@ export default async function AdminInventoryPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Product</TableHead>
-                <TableHead>Size</TableHead>
-                <TableHead>Size SKU</TableHead>
+                <TableHead>Code</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Stock</TableHead>
               </TableRow>
@@ -81,14 +84,14 @@ export default async function AdminInventoryPage() {
                     >
                       {variant.product.name}
                     </Link>
-                    <p className="text-xs text-muted-foreground">
-                      {variant.product.sku}
-                      {variant.product.isActive ? "" : " · hidden"}
-                    </p>
+                    {variant.product.isActive ? null : (
+                      <p className="text-xs text-muted-foreground">hidden</p>
+                    )}
                   </TableCell>
 
-                  <TableCell>{variant.size ?? "Free Size"}</TableCell>
-                  <TableCell className="text-muted-foreground">{variant.sku}</TableCell>
+                  <TableCell className="font-mono text-xs select-all">
+                    {variant.barcode}
+                  </TableCell>
 
                   <TableCell>
                     {variant.stockQty === 0 ? (
@@ -104,7 +107,7 @@ export default async function AdminInventoryPage() {
                     <StockCell
                       variantId={variant.id}
                       stockQty={variant.stockQty}
-                      label={`${variant.product.name}, size ${variant.size ?? "Free Size"}`}
+                      label={variant.product.name}
                     />
                   </TableCell>
                 </TableRow>

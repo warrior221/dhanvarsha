@@ -462,7 +462,7 @@ async function consumeStepCode(
  * One recovery code clears the WHOLE ladder — it is the last resort, so it
  * cannot itself be gated behind the steps it replaces. Each is single use.
  */
-export async function useRecoveryCode(
+export async function redeemRecoveryCode(
   sessionId: string,
   userId: string,
   code: string,

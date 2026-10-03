@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { CheckInTabs } from "@/components/admin/check-in-tabs";
 import { PurchaseForm } from "@/components/admin/purchase-form";
+import { RestockForm } from "@/components/admin/restock-form";
 import { requireAdminPage } from "@/lib/auth-guards";
 import { db } from "@/lib/db";
 
@@ -33,7 +35,10 @@ export default async function CheckInPage() {
         </p>
       </div>
 
-      <PurchaseForm categories={categories} />
+      <CheckInTabs
+        newDesign={<PurchaseForm categories={categories} />}
+        restock={<RestockForm />}
+      />
     </div>
   );
 }

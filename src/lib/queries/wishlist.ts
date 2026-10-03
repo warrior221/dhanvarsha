@@ -1,4 +1,4 @@
-import { EMPTY_WISHLIST, type WishlistView } from "@/lib/cart";
+import type { WishlistView } from "@/lib/cart";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import {

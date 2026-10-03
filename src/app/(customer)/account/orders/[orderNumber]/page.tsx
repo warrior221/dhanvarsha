@@ -109,7 +109,6 @@ export default async function OrderDetailPage(
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium">{item.productName}</p>
                 <p className="text-xs text-muted-foreground">
-                  {item.size ? `Size ${item.size} · ` : ""}
                   {formatInr(item.price)} × {item.quantity}
                 </p>
               </div>

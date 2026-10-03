@@ -23,14 +23,13 @@ import { ApiError, requestJson } from "@/lib/api-client";
  * the shop.
  */
 
-type Row = { size: string | null; quantity: number };
-
 type Line = {
   key: string;
   categoryId: string;
   name: string;
+  colourName: string;
   costPrice: string;
-  rows: Row[];
+  quantity: number;
   images: EditableImage[];
 };
 
@@ -39,10 +38,11 @@ function blankLine(categoryId: string): Line {
     key: crypto.randomUUID(),
     categoryId,
     name: "",
+    colourName: "",
     costPrice: "",
-    // One unsized row by default, which is a saree. Sizes are added only for
-    // readymade pieces, where each one is its own variant with its own tag.
-    rows: [{ size: null, quantity: 1 }],
+    // One piece, one quantity. Every piece the shop sells is one size, so there
+    // are no size rows to add.
+    quantity: 1,
     images: [],
   };
 }
@@ -65,10 +65,7 @@ export function PurchaseForm({
     setLines((all) => all.map((line) => (line.key === key ? { ...line, ...patch } : line)));
   }
 
-  const totalPieces = lines.reduce(
-    (sum, line) => sum + line.rows.reduce((n, row) => n + (row.quantity || 0), 0),
-    0,
-  );
+  const totalPieces = lines.reduce((sum, line) => sum + (line.quantity || 0), 0);
 
   async function save() {
     setBusy(true);
@@ -86,8 +83,9 @@ export function PurchaseForm({
         lines: lines.map((line) => ({
           categoryId: line.categoryId,
           name: line.name,
+          colourName: line.colourName,
           costPrice: line.costPrice,
-          rows: line.rows,
+          quantity: line.quantity,
           images: line.images,
         })),
       });
@@ -207,79 +205,33 @@ export function PurchaseForm({
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>How many</Label>
-            {line.rows.map((row, rowIndex) => (
-              <div key={rowIndex} className="flex flex-wrap items-end gap-2">
-                <div className="space-y-1">
-                  <span className="text-xs text-muted-foreground">Size</span>
-                  <Input
-                    value={row.size ?? ""}
-                    placeholder="One size"
-                    className="w-32"
-                    aria-label={`Size for row ${rowIndex + 1}`}
-                    onChange={(event) => {
-                      const next = [...line.rows];
-                      next[rowIndex] = {
-                        ...row,
-                        size: event.target.value.trim() === "" ? null : event.target.value,
-                      };
-                      patchLine(line.key, { rows: next });
-                    }}
-                  />
-                </div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="space-y-1.5">
+              <Label htmlFor={`qty-${line.key}`}>How many arrived</Label>
+              <Input
+                id={`qty-${line.key}`}
+                inputMode="numeric"
+                value={String(line.quantity)}
+                onChange={(event) =>
+                  patchLine(line.key, {
+                    quantity: Number(event.target.value.replace(/\D/g, "")) || 0,
+                  })
+                }
+              />
+            </div>
 
-                <div className="space-y-1">
-                  <span className="text-xs text-muted-foreground">Quantity</span>
-                  <Input
-                    inputMode="numeric"
-                    value={String(row.quantity)}
-                    className="w-24"
-                    aria-label={`Quantity for row ${rowIndex + 1}`}
-                    onChange={(event) => {
-                      const next = [...line.rows];
-                      next[rowIndex] = {
-                        ...row,
-                        quantity: Number(event.target.value.replace(/\D/g, "")) || 0,
-                      };
-                      patchLine(line.key, { rows: next });
-                    }}
-                  />
-                </div>
-
-                {line.rows.length > 1 ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    aria-label={`Remove row ${rowIndex + 1}`}
-                    onClick={() =>
-                      patchLine(line.key, {
-                        rows: line.rows.filter((_, i) => i !== rowIndex),
-                      })
-                    }
-                  >
-                    <Trash2 className="size-4" aria-hidden />
-                  </Button>
-                ) : null}
-              </div>
-            ))}
-
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                patchLine(line.key, { rows: [...line.rows, { size: "", quantity: 1 }] })
-              }
-            >
-              <Plus className="size-4" aria-hidden />
-              Add a size
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              Leave the size blank for a saree. Add a row per size for readymade
-              pieces — each size gets its own tag.
-            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor={`colour-${line.key}`}>Colour (optional)</Label>
+              <Input
+                id={`colour-${line.key}`}
+                value={line.colourName}
+                placeholder="Royal Blue"
+                onChange={(event) => patchLine(line.key, { colourName: event.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Link it to the other colours later, when you price it.
+              </p>
+            </div>
           </div>
 
           <div className="space-y-1.5">

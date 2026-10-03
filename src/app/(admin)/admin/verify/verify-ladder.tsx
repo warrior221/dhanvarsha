@@ -93,7 +93,7 @@ export function VerifyLadder({ initial }: { initial: State }) {
     }
   }
 
-  async function useRecovery() {
+  async function redeemRecovery() {
     setBusy(true);
     setError(null);
 
@@ -264,7 +264,7 @@ export function VerifyLadder({ initial }: { initial: State }) {
               <Button
                 type="button"
                 disabled={busy || recoveryCode.trim().length < 8}
-                onClick={() => void useRecovery()}
+                onClick={() => void redeemRecovery()}
               >
                 {busy ? "Checking…" : "Use this code"}
               </Button>

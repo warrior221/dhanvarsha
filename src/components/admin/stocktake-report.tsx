@@ -125,8 +125,7 @@ export function StocktakeReportView({ report }: { report: StocktakeReport }) {
               <li key={line.lineId} className="flex flex-wrap items-center gap-x-3 py-2 text-sm">
                 <span className="flex-1">
                   {line.productName}
-                  {line.size ? ` · ${line.size}` : ""}
-                </span>
+                                  </span>
                 <span className="text-muted-foreground tabular-nums">
                   expected {line.expectedQty}, found {line.countedQty}
                 </span>
@@ -268,11 +267,10 @@ function LineRow({
       <div className="min-w-0 flex-1">
         <p className="font-medium">
           {line.productName}
-          {line.size ? ` · ${line.size}` : ""}
-        </p>
+                  </p>
         <p className="text-sm text-muted-foreground">
           Expected {line.expectedQty}, found {line.countedQty}
-          {line.sku ? ` · ${line.sku}` : ""}
+          {line.code ? ` · ${line.code}` : ""}
         </p>
         {moved ? (
           <p className="text-sm text-amber-700 dark:text-amber-500">

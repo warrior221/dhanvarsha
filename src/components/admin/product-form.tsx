@@ -7,11 +7,8 @@ import {
   AttributePicker,
   type PickerAttribute,
 } from "@/components/admin/attribute-picker";
+import { DesignPicker } from "@/components/admin/design-picker";
 import { ImageUploader, type EditableImage } from "@/components/admin/image-uploader";
-import {
-  VariantEditor,
-  type EditableVariant,
-} from "@/components/admin/variant-editor";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,7 +30,6 @@ export type ProductFormValues = {
   id?: string;
   name: string;
   slug: string;
-  sku: string;
   description: string;
   categoryId: string;
   mrp: string;
@@ -41,19 +37,26 @@ export type ProductFormValues = {
   costPrice: string;
   supplierName: string;
   purchaseNote: string;
-  isReadymade: boolean;
   isActive: boolean;
   careInstructions: string;
   silkMarkNumber: string;
+  colourName: string;
+  sameDesignAsProductId: string | null;
   images: EditableImage[];
-  variants: EditableVariant[];
+  /** The one piece's stock. There are no sizes to keep separate counts for. */
+  stockQty: number;
   attributeValueIds: string[];
+  /** The piece's one code, read-only. Issued once and never reissued. */
+  code?: string | null;
+  /** Sizes from before the shop went one-size. Shown as a warning, never edited. */
+  legacySizes?: { size: string; stockQty: number; code: string }[];
+  /** The other colours already linked to this one, for the picker to show. */
+  otherColours?: { id: string; name: string; colourName: string | null }[];
 };
 
 const BLANK: ProductFormValues = {
   name: "",
   slug: "",
-  sku: "",
   description: "",
   categoryId: "",
   mrp: "",
@@ -61,12 +64,13 @@ const BLANK: ProductFormValues = {
   costPrice: "",
   supplierName: "",
   purchaseNote: "",
-  isReadymade: false,
   isActive: true,
   careInstructions: "",
   silkMarkNumber: "",
+  colourName: "",
+  sameDesignAsProductId: null,
   images: [],
-  variants: [],
+  stockQty: 0,
   attributeValueIds: [],
 };
 
@@ -183,12 +187,20 @@ export function ProductForm({
         </Field>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Product code (SKU)" error={fieldErrors.sku} htmlFor="sku">
+          <Field
+            label="Code"
+            htmlFor="code"
+            hint={
+              isEdit
+                ? "Printed on the tag and scanned at the counter. Issued once and never changed, so labels already printed keep working."
+                : "Issued automatically when you save, and printed on the tag. It is the only code this piece has."
+            }
+          >
             <Input
-              id="sku"
-              value={values.sku}
-              onChange={(event) => set("sku", event.target.value.toUpperCase())}
-              placeholder="SR-KJV-001"
+              id="code"
+              readOnly
+              value={values.code ?? "issued when you save"}
+              className="font-mono select-all"
             />
           </Field>
 
@@ -264,14 +276,6 @@ export function ProductForm({
         </Field>
 
         <div className="flex flex-wrap gap-8">
-          <label className="flex items-center gap-2 text-sm">
-            <Switch
-              checked={values.isReadymade}
-              onCheckedChange={(checked) => set("isReadymade", checked)}
-            />
-            Readymade (stitched)
-          </label>
-
           <label className="flex items-center gap-2 text-sm">
             <Switch
               checked={values.isActive}
@@ -419,20 +423,77 @@ export function ProductForm({
 
       {/* ---------------------------------------------------------- */}
       <Section
-        title="Sizes and stock"
-        description="Customers must pick a size before adding to their bag, so every product needs at least one."
+        title="Stock"
+        description="Every piece is one size, so there is nothing to choose and nothing to set up. One piece is created with the product, and this is how many of it you have."
       >
-        {fieldErrors.variants ? (
-          <p role="alert" className="text-sm text-destructive">
-            {fieldErrors.variants}
-          </p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="How many in stock" error={fieldErrors.stockQty} htmlFor="stock">
+            <Input
+              id="stock"
+              inputMode="numeric"
+              value={String(values.stockQty)}
+              onChange={(event) => {
+                const parsed = Number(event.target.value.replace(/\D/g, ""));
+                set("stockQty", Number.isFinite(parsed) ? parsed : 0);
+              }}
+            />
+          </Field>
+
+        </div>
+
+        {values.legacySizes && values.legacySizes.length > 0 ? (
+          <Alert>
+            <AlertDescription>
+              <span className="font-medium">
+                This product still has {values.legacySizes.length} extra{" "}
+                {values.legacySizes.length === 1 ? "size" : "sizes"} from before the
+                shop went one-size.
+              </span>{" "}
+              Only the first is on the shop; the stock below cannot be sold and is not
+              edited here. Nothing has been deleted — these rows hold real stock and
+              real history.
+              <ul className="mt-2 space-y-0.5 font-mono text-xs">
+                {values.legacySizes.map((extra) => (
+                  <li key={extra.code}>
+                    {extra.code} · size {extra.size} · {extra.stockQty} in stock
+                  </li>
+                ))}
+              </ul>
+            </AlertDescription>
+          </Alert>
         ) : null}
-        <VariantEditor
-          variants={values.variants}
-          productSku={values.sku}
-          defaultPrice={values.sellingPrice}
-          onChange={(next) => set("variants", next)}
-        />
+      </Section>
+
+      {/* ---------------------------------------------------------- */}
+      <Section
+        title="Colour"
+        description="Each colour is its own product, because each is its own piece on the shelf with its own tag, cost, stock and photographs. Linking them lets a shopper switch between the colours from the product page."
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field
+            label="This colour"
+            error={fieldErrors.colourName}
+            htmlFor="colour"
+            hint="Optional. Shown on the colour buttons, e.g. Royal Blue."
+          >
+            <Input
+              id="colour"
+              value={values.colourName}
+              onChange={(event) => set("colourName", event.target.value)}
+              placeholder="Royal Blue"
+            />
+          </Field>
+
+          <div>
+            <p className="mb-1 text-sm font-medium">Same design as</p>
+            <DesignPicker
+              value={values.sameDesignAsProductId}
+              alreadyLinked={values.otherColours ?? []}
+              excludeProductId={values.id}
+              onChange={(next) => set("sameDesignAsProductId", next)}
+            />
+          </div>
+        </div>
       </Section>
 
       {/* ---------------------------------------------------------- */}

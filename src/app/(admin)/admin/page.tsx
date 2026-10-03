@@ -63,7 +63,7 @@ export default async function AdminDashboardPage() {
         <Stat
           label="Pieces in stock"
           value={piecesInStock._sum.stockQty ?? 0}
-          hint="Across every size"
+          hint="Across every piece"
         />
       </div>
 

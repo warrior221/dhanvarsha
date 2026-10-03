@@ -121,9 +121,14 @@ model Category {
   products Product[]
 }
 
+/// A piece the shop sells.
+///
+/// It has ONE code, and that is the one printed on its tag — see
+/// `ProductVariant.barcode`. There is deliberately no second, human-invented
+/// code: a made-up code means nothing to anybody, and two codes for one saree is
+/// one more than anyone can keep straight.
 model Product {
   id               String                  @id @default(cuid())
-  sku              String                  @unique
   name             String
   slug             String                  @unique
   description      String
@@ -139,7 +144,13 @@ model Product {
   /// is what puts it on the shop.
   sellingPrice     Decimal?                @db.Decimal(10, 2)
 
-  isReadymade      Boolean                 @default(false)
+  /// The colour of THIS entry, e.g. "Royal Blue". Different colours of one
+  /// design are separate products sharing a `group`, because each colour is a
+  /// separate piece on the shelf with its own tag, cost and stock.
+  colourName       String?
+  /// Set when this piece is one colour of a design that comes in several.
+  groupId          String?
+  group            ProductGroup?           @relation(fields: [groupId], references: [id], onDelete: SetNull)
   careInstructions String?
   isActive         Boolean                 @default(true)
   /// Silk Mark hologram number, when this piece carries one. Set per piece,
@@ -159,8 +170,23 @@ model Product {
 
   @@index([categoryId, isActive])
   @@index([sellingPrice])
-  @@index([isReadymade])
+  @@index([groupId])
   @@index([createdAt])
+}
+
+/// One design, in however many colours the shop stocks.
+///
+/// Holds nothing but an identity on purpose. Each colour is its OWN product —
+/// its own tag, cost, stock and photographs — because that is what it is on the
+/// shelf. This only records that they are the same design, so the product page
+/// can offer the other colours.
+///
+/// A group with one product left is harmless: the page simply shows no other
+/// colours.
+model ProductGroup {
+  id        String    @id @default(cuid())
+  products  Product[]
+  createdAt DateTime  @default(now())
 }
 
 // ADMIN ONLY. Separate table so a customer-facing findMany() cannot leak it.
@@ -229,8 +255,6 @@ model ProductVariant {
   id         String      @id @default(cuid())
   productId  String
   product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
-  size       String?
-  sku        String      @unique
   /// Optional, and this is the price actually charged — Product.sellingPrice
   /// is what the shop displays. A variant with no price cannot be bought:
   /// cart and checkout refuse it, and its product is hidden from customers.
@@ -241,9 +265,11 @@ model ProductVariant {
   movements  StockMovement[]
   purchaseItems PurchaseItem[]
   stocktakeLines StocktakeLine[]
-  /// Code 128, printed on the tag and scanned at the counter. Unique across
-  /// the shop. Null only for variants created before barcodes existed.
-  barcode    String?     @unique
+  /// THE piece's code. Code 128, printed on the tag, scanned at the counter and
+  /// typed into a search box when a tag will not read. Unique across the shop,
+  /// issued once and never reissued — it is ink on a tag, and the day it changes
+  /// every label already printed becomes wrong.
+  barcode    String      @unique
 
   @@index([productId])
 }
@@ -324,7 +350,6 @@ model OrderItem {
   variant      ProductVariant @relation(fields: [variantId], references: [id])
   productName  String
   productImage String
-  size         String?
   price        Decimal        @db.Decimal(10, 2)
   costPrice    Decimal        @db.Decimal(10, 2)
   quantity     Int

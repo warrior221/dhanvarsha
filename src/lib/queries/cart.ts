@@ -4,6 +4,7 @@ import {
   type CartItemView,
   type CartView,
 } from "@/lib/cart";
+import type { Prisma } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { formatInr, toPaise } from "@/lib/format";
@@ -23,11 +24,16 @@ function ownerWhere(owner: Shopper) {
     : { sessionId: owner.sessionId };
 }
 
+/**
+ * `satisfies` is not decoration. Without it TypeScript only checks that this is
+ * an object; with it, every field name is checked against the database schema,
+ * and a column that has been renamed or dropped fails the build instead of
+ * failing in front of a shopper.
+ */
 const cartItemInclude = {
   variant: {
     select: {
       id: true,
-      size: true,
       price: true,
       stockQty: true,
       product: {
@@ -35,14 +41,13 @@ const cartItemInclude = {
           id: true,
           name: true,
           slug: true,
-          sku: true,
           isActive: true,
           images: { select: { url: true, altText: true }, orderBy: { position: "asc" }, take: 1 },
         },
       },
     },
   },
-} as const;
+} as const satisfies Prisma.CartItemInclude;
 
 /** Reads the cart without creating one. A GET must not write. */
 export async function getCart(owner: Shopper): Promise<CartView> {
@@ -61,14 +66,12 @@ function toCartView(
     quantity: number;
     variant: {
       id: string;
-      size: string | null;
       price: { toString(): string } | null;
       stockQty: number;
       product: {
         id: string;
         name: string;
         slug: string;
-        sku: string;
         isActive: boolean;
         images: { url: string; altText: string }[];
       };
@@ -98,7 +101,6 @@ function toCartView(
     return {
       variantId: item.variant.id,
       quantity: item.quantity,
-      size: item.variant.size,
       stockQty: item.variant.stockQty,
       unitPrice: item.unitPrice,
       lineTotal: paiseToDecimal(linePaise),
@@ -106,7 +108,6 @@ function toCartView(
         id: item.variant.product.id,
         name: item.variant.product.name,
         slug: item.variant.product.slug,
-        sku: item.variant.product.sku,
         image: item.variant.product.images[0] ?? null,
       },
     };

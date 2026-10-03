@@ -52,7 +52,6 @@ export type OrderDetailView = {
   items: {
     productName: string;
     productImage: string;
-    size: string | null;
     price: string;
     quantity: number;
     lineTotalFormatted: string;
@@ -130,7 +129,6 @@ export async function getCustomerOrder(
         select: {
           productName: true,
           productImage: true,
-          size: true,
           price: true,
           quantity: true,
         },
@@ -167,7 +165,6 @@ export async function getCustomerOrder(
       return {
         productName: item.productName,
         productImage: item.productImage,
-        size: item.size,
         price: unit,
         quantity: item.quantity,
         lineTotalFormatted: formatInr(lineTotal),

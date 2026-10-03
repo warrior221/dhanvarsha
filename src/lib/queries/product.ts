@@ -44,23 +44,50 @@ function requiredPrice(value: { toString(): string } | null, what: string): stri
 /** Everything the product detail page needs. */
 export const publicProductSelect = {
   id: true,
-  sku: true,
   name: true,
   slug: true,
   description: true,
   mrp: true,
   sellingPrice: true,
-  isReadymade: true,
   careInstructions: true,
   silkMarkNumber: true,
+  colourName: true,
   category: { select: { id: true, name: true, slug: true } },
   images: {
     select: { url: true, altText: true, position: true },
     orderBy: { position: "asc" },
   },
+  // Exactly one. Every piece the shop sells is one size, so there is nothing to
+  // choose; `orderBy` only keeps the choice deterministic for the two
+  // placeholder products that still carry sizes from before.
   variants: {
-    select: { id: true, size: true, price: true, stockQty: true },
-    orderBy: { sku: "asc" },
+    select: { id: true, price: true, stockQty: true, barcode: true },
+    orderBy: { barcode: "asc" },
+    take: 1,
+  },
+  /**
+   * The other colours of this design.
+   *
+   * Filtered by the same visibility rule as any other listing, so a colour that
+   * has been unpriced or hidden is not offered. Sold-out colours ARE offered:
+   * the page says so, and hiding them would make a design look thinner than it
+   * is.
+   */
+  group: {
+    select: {
+      products: {
+        where: PUBLIC_PRODUCT_WHERE,
+        orderBy: { name: "asc" },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          colourName: true,
+          images: { select: { url: true, altText: true }, orderBy: { position: "asc" }, take: 1 },
+          variants: { select: { stockQty: true }, orderBy: { barcode: "asc" }, take: 1 },
+        },
+      },
+    },
   },
   attributes: {
     select: {
@@ -82,19 +109,21 @@ export const publicProductSelect = {
  */
 export const productCardSelect = {
   id: true,
-  sku: true,
   name: true,
   slug: true,
   mrp: true,
   sellingPrice: true,
-  isReadymade: true,
+  colourName: true,
   category: { select: { name: true, slug: true } },
   images: {
     select: { url: true, altText: true },
     orderBy: { position: "asc" },
     take: 1,
   },
-  variants: { select: { stockQty: true } },
+  // The one piece, so "in stock" on a tile means the same thing as on the
+  // product page. Summing every variant could say in stock while the piece a
+  // shopper can actually buy has none left.
+  variants: { select: { stockQty: true }, orderBy: { barcode: "asc" }, take: 1 },
 } as const satisfies Prisma.ProductSelect;
 
 
@@ -106,7 +135,7 @@ export const wishlistProductSelect = {
   ...productCardSelect,
   // Needed to tell a saved piece that is still on sale from one that is not.
   isActive: true,
-  variants: { select: { id: true, size: true, stockQty: true } },
+  variants: { select: { id: true, stockQty: true }, orderBy: { barcode: "asc" }, take: 1 },
 } as const satisfies Prisma.ProductSelect;
 
 type RawWishlistProduct = Prisma.ProductGetPayload<{
@@ -125,7 +154,8 @@ export type WishlistProductView = Omit<ProductCardView, "sellingPrice"> & {
   sellingPrice: string | null;
   /** False when the piece has no price or has been deactivated. */
   isAvailable: boolean;
-  variants: { id: string; size: string | null; stockQty: number }[];
+  /** The one piece, so "move to bag" knows what to add. Null if none exists. */
+  piece: { id: string; stockQty: number } | null;
 };
 
 export function toWishlistProductView(
@@ -136,17 +166,16 @@ export function toWishlistProductView(
   // has been taken off sale since it was saved.
   return {
     id: product.id,
-    sku: product.sku,
     name: product.name,
     slug: product.slug,
     mrp: product.mrp?.toString() ?? null,
     sellingPrice: product.sellingPrice?.toString() ?? null,
     isAvailable: product.sellingPrice !== null && product.isActive,
-    isReadymade: product.isReadymade,
+    colourName: product.colourName,
     category: product.category,
     image: product.images[0] ?? null,
-    totalStock: product.variants.reduce((sum, v) => sum + v.stockQty, 0),
-    variants: [...product.variants].sort(compareVariants),
+    totalStock: product.variants[0]?.stockQty ?? 0,
+    piece: product.variants[0] ?? null,
   };
 }
 
@@ -182,20 +211,36 @@ type RawProductCard = Prisma.ProductGetPayload<{ select: typeof productCardSelec
 
 export type ProductView = {
   id: string;
-  sku: string;
   name: string;
   slug: string;
   description: string;
   /** Null when the piece has no "was" price to strike through. */
   mrp: string | null;
   sellingPrice: string;
-  isReadymade: boolean;
   careInstructions: string | null;
   /** Set only on a piece that carries a Silk Mark hologram tag. */
   silkMarkNumber: string | null;
+  /** This entry's colour, e.g. "Royal Blue". Null when it has no label. */
+  colourName: string | null;
   category: { id: string; name: string; slug: string };
   images: { url: string; altText: string; position: number }[];
-  variants: { id: string; size: string | null; price: string; stockQty: number }[];
+  /**
+   * The one piece, and its code.
+   *
+   * That code is the ONLY one a piece has: it is printed on the tag, scanned at
+   * the counter, and what a shopper quotes on the phone. There is deliberately no
+   * second, made-up product code to keep in step with it.
+   */
+  piece: { id: string; price: string; stockQty: number; code: string } | null;
+  /** The other colours of this design, for the switcher beside Add to bag. */
+  colours: {
+    id: string;
+    name: string;
+    slug: string;
+    colourName: string | null;
+    image: { url: string; altText: string } | null;
+    stockQty: number;
+  }[];
   attributes: {
     id: string;
     value: string;
@@ -206,68 +251,54 @@ export type ProductView = {
 
 export type ProductCardView = {
   id: string;
-  sku: string;
   name: string;
   slug: string;
   /** Null when the piece has no "was" price to strike through. */
   mrp: string | null;
   sellingPrice: string;
-  isReadymade: boolean;
+  /** This entry's colour, e.g. "Royal Blue". Null when it has no label. */
+  colourName: string | null;
   category: { name: string; slug: string };
   image: { url: string; altText: string } | null;
+  /** The one piece's stock, so a tile and its product page always agree. */
   totalStock: number;
 };
 
-/**
- * Garment sizes have a natural order that neither the SKU nor the size string
- * sorts into: ordering by SKU gives "L, M, S, XL". Known sizes come first in
- * this order, then numeric sizes ascending, then anything else alphabetically.
- */
-const SIZE_ORDER = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "XXXL", "3XL", "4XL"];
-
-function sizeRank(size: string | null): number {
-  if (size === null) return -1;
-
-  const index = SIZE_ORDER.indexOf(size.trim().toUpperCase());
-  if (index !== -1) return index;
-
-  // Numeric sizes (38, 40, 42...) sort after the lettered ones, in order.
-  const numeric = Number(size.trim());
-  if (Number.isFinite(numeric)) return SIZE_ORDER.length + numeric;
-
-  return Number.MAX_SAFE_INTEGER;
-}
-
-function compareVariants(
-  a: { size: string | null },
-  b: { size: string | null },
-): number {
-  const rankDifference = sizeRank(a.size) - sizeRank(b.size);
-  if (rankDifference !== 0) return rankDifference;
-
-  return (a.size ?? "").localeCompare(b.size ?? "");
-}
-
 export function toProductView(product: RawProduct): ProductView {
+  const piece = product.variants[0] ?? null;
+
   return {
     id: product.id,
-    sku: product.sku,
     name: product.name,
     slug: product.slug,
     description: product.description,
     mrp: product.mrp?.toString() ?? null,
     sellingPrice: requiredPrice(product.sellingPrice, product.slug),
-    isReadymade: product.isReadymade,
     careInstructions: product.careInstructions,
     silkMarkNumber: product.silkMarkNumber,
+    colourName: product.colourName,
     category: product.category,
     images: product.images,
-    variants: [...product.variants].sort(compareVariants).map((variant) => ({
-      id: variant.id,
-      size: variant.size,
-      price: requiredPrice(variant.price, `${product.slug} variant ${variant.id}`),
-      stockQty: variant.stockQty,
-    })),
+    piece:
+      piece === null
+        ? null
+        : {
+            id: piece.id,
+            price: requiredPrice(piece.price, `${product.slug} piece ${piece.id}`),
+            stockQty: piece.stockQty,
+            code: piece.barcode,
+          },
+    // This product is in the group too, so it is filtered out of its own list.
+    colours: (product.group?.products ?? [])
+      .filter((other) => other.id !== product.id)
+      .map((other) => ({
+        id: other.id,
+        name: other.name,
+        slug: other.slug,
+        colourName: other.colourName,
+        image: other.images[0] ?? null,
+        stockQty: other.variants[0]?.stockQty ?? 0,
+      })),
     attributes: product.attributes.map((link) => ({
       id: link.value.id,
       value: link.value.value,
@@ -280,14 +311,13 @@ export function toProductView(product: RawProduct): ProductView {
 export function toProductCardView(product: RawProductCard): ProductCardView {
   return {
     id: product.id,
-    sku: product.sku,
     name: product.name,
     slug: product.slug,
     mrp: product.mrp?.toString() ?? null,
     sellingPrice: requiredPrice(product.sellingPrice, product.slug),
-    isReadymade: product.isReadymade,
+    colourName: product.colourName,
     category: product.category,
     image: product.images[0] ?? null,
-    totalStock: product.variants.reduce((sum, v) => sum + v.stockQty, 0),
+    totalStock: product.variants[0]?.stockQty ?? 0,
   };
 }
